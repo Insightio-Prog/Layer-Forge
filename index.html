@@ -2260,6 +2260,9 @@ function sceneJSON(list=state.layers,skipped){
     ...(skipped?{skipped}:{}),
     layers:list.map((l,i)=>({...parentInfo(l,list),name:l.name,file:fileFor(l,i),z:i,x:l.x,y:l.y,w:l.w,h:l.h,scale:l.scale,rotation:l.rot,pivot:{x:l.px,y:l.py},opacity:l.op,visible:l.vis,locked:l.lock,ai:l.ai,...(l.tint?{tint:{color:l.tint,mode:l.tm||'multiply',amount:l.ta==null?1:l.ta}}:{}),...(l.shape&&shapeOk(l)?{shape:shapePublic(l.shape)}:{})}))};
 }
+const TOUCH=('ontouchstart' in window)&&navigator.maxTouchPoints>1;
+let zipNm='';try{zipNm=localStorage.getItem('lf-zipnm')||''}catch(_){}
+function setZipNm(n){zipNm=n||'';try{zipNm?localStorage.setItem('lf-zipnm',zipNm):localStorage.removeItem('lf-zipnm')}catch(_){}}
 function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},5000)}
 const isEmptyLayer=l=>{const r=store.get(l.id);return !r||!r.mask||!r.mask.some(v=>v>0)};
 async function saveZip(game){
@@ -2274,8 +2277,15 @@ async function saveZip(game){
     }else game=false;
     const enc=new TextEncoder(),entries=[{name:'scene.json',data:enc.encode(JSON.stringify(sceneJSON(list,skipped&&skipped.length?skipped:undefined),null,2))}];
     for(let i=0;i<list.length;i++){const l=list[i];entries.push({name:fileFor(l,i),data:new Uint8Array(await store.get(l.id).blob.arrayBuffer())})}
-    const fname=slug(state.name)+(game?'-game':'')+'.zip',z=zipBuild(entries);dl(z,fname);
-    toast(`saved ${fname} · ${list.length} layer${list.length===1?'':'s'} · ${fmtSize(z.size)}`+(skipped&&skipped.length?` · left out ${skipped.length}: ${skipped.join(', ')}`:''),'good');
+    const fname=(!game&&zipNm)||slug(state.name)+(game?'-game':'')+'.zip',z=zipBuild(entries);
+    let how='saved';
+    if(!game&&TOUCH&&navigator.canShare&&navigator.share){
+      /* iPad: the share sheet lets you "Save to Files" and replace the zip you imported */
+      try{const f=new File([z],fname,{type:'application/zip'});
+        if(navigator.canShare({files:[f]})){await navigator.share({files:[f]});how='shared'}else dl(z,fname)}
+      catch(e){if(e&&e.name==='AbortError'){toast('save cancelled','warn');return}dl(z,fname)}
+    }else dl(z,fname);
+    toast(`${how} ${fname} · ${list.length} layer${list.length===1?'':'s'} · ${fmtSize(z.size)}`+(skipped&&skipped.length?` · left out ${skipped.length}: ${skipped.join(', ')}`:''),'good');
   }catch(err){console.error(err);toast('save failed: '+err.message,'err')}finally{setBusy(-1)}
 }
 async function openZip(file){
@@ -2286,7 +2296,7 @@ async function openZip(file){
     const key=[...files.keys()].find(k=>/(^|\/)scene\.json$/i.test(k))||[...files.keys()].find(k=>/(^|\/)layers\.json$/i.test(k));
     const pngs=[...files.keys()].filter(k=>/\.png$/i.test(k)).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
     const mk=u8=>new Blob([u8],{type:'image/png'});
-    resetScene(true);
+    resetScene(true);setZipNm(file.name);
     if(key){
       const sc=JSON.parse(new TextDecoder().decode(files.get(key)));
       state.name=sc.name||baseName(file.name);state.W=sc.width||3840;state.H=sc.height||2160;
@@ -2308,7 +2318,7 @@ async function openZip(file){
     $('#sname').value=state.name;fit(true);changed();toast(`opened ${state.layers.length} layer${state.layers.length===1?'':'s'}`,'good');
   }catch(err){console.error(err);toast('could not open zip: '+err.message,'err')}finally{setBusy(-1)}
 }
-function resetScene(keepSize){
+function resetScene(keepSize){setZipNm('');
   state.layers=[];state.sel=null;tcache.clear();store.clear();U.length=0;R.length=0;lastStruct='';savedBlobs.clear();
   if(!keepSize){state.W=3840;state.H=2160}
 }
