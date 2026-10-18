@@ -1,0 +1,2556 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>layerforge</title>
+<style>
+:root{
+  --bg:#141413;--panel:#1B1A18;--raised:#181816;--line:#2E2C28;--line2:#4A4741;
+  --text:#E8E6DC;--dim:#A8A69E;--clay:#D97757;--clay-bg:#3A2A22;--clay-text:#F0B49A;
+  --good:#9FD09E;--warn:#E8C77A;--err:#E88A7A;--surround:#202020;
+  --mono:"Cascadia Mono",Consolas,ui-monospace,SFMono-Regular,Menlo,monospace;
+  --ctl:36px;--side:300px;
+}
+@media (pointer:coarse){:root{--ctl:44px}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:13px/1.6 var(--mono);overflow:hidden;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;border-radius:6px}
+button:disabled{cursor:default;opacity:.4}
+input,select{font:inherit;color:var(--text)}
+:focus-visible{outline:2px solid var(--clay);outline-offset:2px}
+.dim{color:var(--dim)}
+.ic{display:block;flex:none}
+
+#app{display:grid;height:100%;grid-template-columns:56px minmax(0,1fr) var(--side);
+  grid-template-rows:56px minmax(0,1fr) 64px 28px;
+  grid-template-areas:"top top top" "rail stage side" "prompt prompt prompt" "status status status"}
+body.noside{--side:0px}
+body.noside #side{display:none}
+
+/* header */
+#top{grid-area:top;display:flex;align-items:center;gap:6px;padding:0 10px 0 14px;background:var(--bg);border-bottom:1px solid var(--line);min-width:0}
+.brand{display:flex;align-items:center;gap:8px;min-width:0}
+.logo{color:var(--clay);font-size:22px;line-height:1;display:inline-block;width:24px;text-align:center}
+.logo.busy{animation:spin 2.4s linear infinite,pulse 1.2s ease-in-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{50%{opacity:.55}}
+.brand b{font-weight:700}
+#sname{background:transparent;border:1px solid transparent;border-radius:6px;padding:2px 6px;min-width:6ch;height:32px;color:var(--text);font-weight:700}
+#sname:hover{border-color:var(--line)}
+#sname:focus{border-color:var(--line2);outline:none;box-shadow:0 0 0 2px var(--clay)}
+.tabs{display:flex;gap:4px;margin-left:12px}
+.tab{height:40px;padding:0 14px;border:1px solid transparent;color:var(--dim)}
+.tab:hover:not(:disabled){color:var(--text)}
+.tab.on{border-color:var(--line2);color:var(--text);background:var(--raised)}
+.spacer{flex:1}
+.ib{width:44px;height:44px;display:grid;place-items:center;color:var(--text)}
+.ib:hover:not(:disabled){background:var(--raised)}
+#kbdhint{font-size:12px;margin-right:6px}
+
+/* rail */
+#rail{grid-area:rail;background:var(--bg);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0}
+.tool{width:44px;height:44px;display:grid;place-items:center;border:1px solid transparent;color:var(--text)}
+.tool:hover:not(:disabled){background:var(--raised)}
+.tool.on{background:var(--clay-bg);border-color:var(--clay);color:var(--clay-text)}
+.rule{width:28px;height:1px;background:var(--line);margin:4px 0}
+
+/* stage */
+#stage{grid-area:stage;position:relative;background:var(--surround);overflow:hidden;touch-action:none;min-width:0;min-height:0}
+#cv{position:absolute;inset:0;display:block}
+#empty{position:absolute;inset:0;display:none;place-items:center;pointer-events:none;text-align:center;color:var(--dim)}
+#empty.show{display:grid}
+#empty .zz{font-size:22px;letter-spacing:.3em;margin-bottom:6px}
+#empty .row2{display:block;line-height:1.9}
+#hint{position:absolute;left:14px;bottom:14px;display:none;align-items:center;gap:12px;padding:8px 8px 8px 14px;background:var(--panel);border:1px solid var(--line2);border-radius:8px}
+#hint.show{display:flex}
+#hint button{height:var(--ctl);padding:0 14px;border:1px solid var(--line2)}
+#zoombar{position:absolute;right:14px;bottom:14px;display:flex;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+#zoombar button{min-width:44px;height:44px;display:grid;place-items:center;border-radius:0}
+#zoombar button:hover{background:var(--raised)}
+#zoombar .pct{min-width:64px;text-align:center;color:var(--dim)}
+#tbar{position:absolute;left:14px;top:14px;display:none;align-items:center;gap:14px;padding:4px 14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:48px}
+#tbar.show{display:flex}
+#sbar{position:absolute;left:14px;top:14px;display:none;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:6px 14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:48px;max-width:calc(100% - 28px)}
+#sbar.show{display:flex}.stypes{display:flex;gap:6px}.stypes .sm{min-width:40px;height:36px;border:1px solid var(--line);border-radius:6px;font-size:16px}.stypes .sm.on{border-color:var(--clay);color:var(--clay-text)}
+.insp .shbox{display:grid;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--line)}.insp select.shsel{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px;padding:4px 6px}.insp .shw{width:64px;min-width:0;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;font:inherit;padding:6px}
+#cbar{position:absolute;left:14px;top:14px;display:none;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:6px 14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:48px;max-width:calc(100% - 28px)}
+#cbar.show{display:flex}
+#rbar{position:absolute;left:14px;top:14px;display:none;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:6px 14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:48px;max-width:calc(100% - 28px)}
+#rbar.show{display:flex}#rbar [hidden]{display:none}#rbar select{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;font:inherit;padding:3px 6px}
+#rprompt{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;font:inherit;padding:5px 8px;width:260px;max-width:100%}#rprompt:focus{outline:none;border-color:var(--clay,#D97757)}
+#cbar select{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;font:inherit;padding:3px 6px}
+#wbar{position:absolute;left:14px;top:14px;display:none;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:6px 14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:48px;max-width:calc(100% - 28px)}
+#wbar.show{display:flex}
+.tb-t{color:var(--clay-text)}
+.sw{width:44px;height:36px;border:1px solid var(--line2);border-radius:6px;background:#888}
+.sm{height:40px;padding:0 14px;border:1px solid var(--line2);border-radius:6px}
+.sm:hover{background:var(--bg)}
+.btn-clay.sm{border:0;height:40px;padding:0 18px}
+.tb-l .v{min-width:4ch;color:var(--text)}
+.tb-l.ck{color:var(--text)}
+.tb-l.ck input{width:18px;height:18px;accent-color:var(--clay)}
+#tbar-t{color:var(--clay-text)}
+.tb-l{display:flex;align-items:center;gap:8px;color:var(--dim)}
+.tb-l input[type=range]{width:140px;accent-color:var(--clay);height:var(--ctl);margin:0}
+.tb-l input[type=color]{width:44px;height:36px;padding:2px;background:var(--bg);border:1px solid var(--line2);border-radius:6px;cursor:pointer}
+#bsz{min-width:5ch;color:var(--text)}
+#side-open{position:absolute;right:0;top:14px;display:none;width:44px;height:44px;place-items:center;background:var(--panel);border:1px solid var(--line);border-right:0;border-radius:8px 0 0 8px}
+body.noside #side-open{display:grid}
+
+/* side panel */
+#side{grid-area:side;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0;min-width:0}
+.ph{display:flex;align-items:center;gap:4px;padding:6px 8px 6px 16px;border-bottom:1px solid var(--line);height:56px}
+.ph .t{flex:1}
+.t .d{color:var(--clay)}
+#layers{flex:1;overflow-y:auto;padding:6px 0;touch-action:pan-y;min-height:0}
+.row{margin:3px 8px;border:1px solid transparent;border-radius:8px}
+.row.sel{background:var(--clay-bg);border-color:var(--clay);color:var(--clay-text)}
+.row.multi{background:var(--clay-bg);border:1px dashed var(--clay);color:var(--clay-text)}.row.multi .grip,.row.multi .sub{color:var(--clay-text)}
+#b-merge{height:30px;padding:0 8px;font-size:12px;white-space:nowrap}#side .ph .t{white-space:nowrap}#b-merge[hidden]{display:none}
+.row.child{margin-left:26px}
+.row.over{border-color:var(--line2);background:var(--raised)}
+.row.dragging{opacity:.5}
+.r1{display:flex;align-items:center;gap:4px;min-height:52px;padding:2px 2px 2px 0;cursor:pointer}
+.grip{width:24px;height:44px;display:grid;place-items:center;color:var(--line2);cursor:grab}
+.row.sel .grip{color:var(--clay-text)}
+.thumb{width:48px;height:32px;border-radius:4px;border:1px solid var(--line2);background:repeating-conic-gradient(#262626 0 25%,#2d2d2d 0 50%) 0 0/10px 10px;flex:none}
+.row.sel .thumb{border-color:var(--clay)}
+.meta{flex:1;min-width:0;padding-left:6px}
+.nm{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.nm .star{color:var(--clay)}
+.sub{display:block;font-size:11px;color:var(--dim);line-height:1.3}
+.row.sel .sub{color:var(--clay-text);opacity:.85}
+.nm-in{width:100%;height:30px;background:var(--bg);border:1px solid var(--clay);border-radius:6px;padding:0 6px}
+.r1 .ib{width:40px;height:44px}
+.hidden-l .nm,.hidden-l .thumb{opacity:.45}
+.insp{padding:2px 12px 12px 14px;display:grid;gap:10px}
+.insp .line{display:flex;align-items:center;gap:10px}
+.insp label{color:var(--clay-text);font-size:12px;min-width:5.5ch}
+.insp input[type=range]{flex:1;min-width:0;accent-color:var(--clay);height:var(--ctl);margin:0}
+.insp .tcol{width:34px;height:var(--ctl,30px);padding:0;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer}
+.insp .tmode{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px;padding:4px 6px}
+.insp .line{min-width:0}.insp .tdots{gap:8px;flex-wrap:wrap}.tdot{width:30px;height:30px;border-radius:50%;border:2px solid var(--line2);padding:0;cursor:pointer;background:none;-webkit-appearance:none;appearance:none;overflow:hidden}.tdot::-webkit-color-swatch-wrapper{padding:0}.tdot::-webkit-color-swatch{border:0;border-radius:50%}.tdot::-moz-color-swatch{border:0;border-radius:50%}.tdot:hover{border-color:var(--text)}
+.insp .sm{font-size:12px;padding:4px 8px;flex-shrink:0}.insp .line>.dim{flex-shrink:0}
+.insp .pv{min-width:4ch;text-align:right;font-size:12px}
+.grid4{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.fld{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--clay-text)}
+.fld input{width:100%;min-width:0;height:var(--ctl);background:var(--bg);border:1px solid var(--line2);border-radius:6px;padding:0 8px;color:var(--text)}
+.fld input:focus{outline:2px solid var(--clay);outline-offset:1px}
+.acts{display:flex;gap:4px;flex-wrap:wrap}
+.acts button{height:var(--ctl);min-width:var(--ctl);padding:0 10px;border:1px solid var(--line2);display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--text)}
+.acts button:hover{background:var(--bg)}
+.acts button.on{border-color:var(--clay);color:var(--clay-text)}
+#ai{border-top:1px solid var(--line);padding:12px 16px 14px;color:var(--dim)}
+#ai .t{color:var(--text)}
+#ai .t .d{color:var(--clay)}
+
+/* prompt bar */
+#prompt{grid-area:prompt;display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--bg);border-top:1px solid var(--line)}
+#prompt .lbl{color:var(--clay);font-weight:700}
+#prompt input{flex:1;height:44px;min-width:0;background:var(--raised);border:1px solid var(--line);border-radius:8px;padding:0 14px}
+#prompt input::placeholder{color:var(--dim)}
+.target{border:1px solid var(--line);border-radius:8px;padding:2px 14px;font-size:11px;color:var(--dim);line-height:1.35;height:48px;display:flex;flex-direction:column;justify-content:center;max-width:220px;white-space:nowrap}
+.target span{color:var(--text);font-size:12px;overflow:hidden;text-overflow:ellipsis}
+.gen{height:48px;padding:0 24px;background:var(--raised);border:1px solid var(--line);color:var(--dim);font-weight:700;border-radius:8px}
+.btn-clay{height:48px;padding:0 22px;background:var(--clay);color:#141413;font-weight:700;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-clay:hover{filter:brightness(1.06)}
+.btn-clay:disabled{opacity:.5}
+
+/* status */
+#status{grid-area:status;display:flex;align-items:center;gap:6px;padding:0 14px;background:var(--bg);border-top:1px solid var(--line);font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden}
+#status .dot{color:var(--good)}
+#status.busy .dot{color:var(--clay)}
+#status .r{margin-left:auto;overflow:hidden;text-overflow:ellipsis}
+
+/* modal + toast */
+#modal{position:fixed;inset:0;background:rgba(20,20,19,.72);display:none;place-items:center;z-index:20;padding:16px}
+#modal.show{display:grid}
+.card{width:min(560px,100%);max-height:100%;overflow:auto;background:var(--panel);border:1px solid var(--line2);border-radius:8px;padding:20px;display:grid;gap:14px}
+.card h2{margin:0;font-size:13px;font-weight:700}
+.card h2 .d{color:var(--clay)}
+.opt{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--line);border-radius:8px;cursor:pointer;min-height:56px}
+.opt.on{background:var(--clay-bg);border-color:var(--clay);color:var(--clay-text)}
+.opt .rd{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--dim);margin-top:2px;flex:none}
+.opt.on .rd{border-color:var(--clay);background:radial-gradient(circle,var(--clay) 0 4px,transparent 5px)}
+.opt .sz{margin-left:auto;color:var(--dim);white-space:nowrap}
+.opt.on .sz{color:var(--clay-text)}
+.opt small{display:block;color:var(--dim)}
+.opt select{margin-top:6px;width:100%;height:var(--ctl);background:var(--bg);border:1px solid var(--line2);border-radius:6px;padding:0 8px}
+.card .foot{display:flex;gap:10px;justify-content:flex-end}
+.card .foot .cancel{height:48px;padding:0 18px;border:1px solid var(--line2)}
+.card input[type=text],.card input[type=password],.card select{height:44px;background:var(--bg);border:1px solid var(--line2);border-radius:6px;padding:0 12px;width:100%}
+select{color-scheme:dark}
+select option{background:#1e1d1b;color:#e8e4dc;font:inherit}
+select option:checked,select option:hover{background:#3a2a22;color:#e9a98f}
+.psel{height:48px;background:var(--raised);border:1px solid var(--line);border-radius:8px;padding:0 8px;color:var(--text)}
+.card label{display:grid;gap:4px}
+.card .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card details{color:var(--dim)}
+.card details summary{cursor:pointer;min-height:36px;display:flex;align-items:center}
+.card details label{margin-top:8px}
+.card .ckl{display:flex;align-items:center;gap:8px;color:var(--text)}
+.card .ckl input{width:18px;height:18px;accent-color:var(--clay)}
+.row.gen{border:1px dashed var(--clay);background:var(--clay-bg);color:var(--clay-text)}
+.gstar{color:var(--clay);width:72px;text-align:center;font-size:22px;flex:none}
+.gstar.spin{display:inline-block;animation:spin 2.4s linear infinite}
+#ai-t .st{color:var(--clay);display:inline-block}
+#ai-t .st.spin{animation:spin 2.4s linear infinite}
+#ai-b{white-space:pre-line;font-size:12px}#ai.shut #ai-b{display:none}#ai.shut{padding-bottom:8px}#ai .t{cursor:pointer;user-select:none}#ai .t .tg{float:right;color:var(--dim)}#cadd.on{background:var(--clay);color:#1a1210}
+#toast{position:fixed;left:50%;bottom:104px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line2);border-radius:8px;padding:8px 16px;display:none;z-index:30;max-width:90vw}
+#toast.show{display:block}
+#toast.warn{border-color:var(--warn);color:var(--warn)}
+#toast.err{border-color:var(--err);color:var(--err)}
+#toast.good{border-color:var(--good);color:var(--good)}
+#drop{position:fixed;inset:8px;border:2px dashed var(--clay);border-radius:12px;display:none;place-items:center;background:rgba(58,42,34,.55);z-index:15;pointer-events:none;color:var(--clay-text)}
+#drop.show{display:grid}
+#refbox{max-width:280px}.rrow{display:flex;gap:6px;align-items:center}#refbox select{background:none;border:0;color:var(--text);font:inherit;font-size:12px;padding:0;outline:none;cursor:pointer}#refbox .sm{height:22px;padding:0 7px}#gref-img{height:26px;max-width:46px;object-fit:cover;border-radius:3px;border:1px solid var(--line)}
+@media (max-width:900px){#kbdhint{display:none}.target{display:none}}
+@media (prefers-reduced-motion:reduce){.logo.busy{animation:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <div class="brand"><span class="logo" id="logo" aria-hidden="true">✻</span><b>layerforge</b><span class="dim">/</span><span class="dim">~/scenes/</span><input id="sname" spellcheck="false" aria-label="scene name" maxlength="40"></div>
+    <nav class="tabs">
+      <button class="tab on" id="tab-canvas">canvas</button>
+      <button class="tab" disabled title="reference images arrive in a later step">refs</button>
+      <button class="tab" id="tab-export">export</button>
+    </nav>
+    <div class="spacer"></div>
+    <span class="dim" id="kbdhint">ctrl+z / ctrl+shift+z</span>
+    <button class="ib" id="b-set" data-ic="settings" title="settings: ai keys and models" aria-label="settings"></button>
+    <button class="ib" id="b-new" data-ic="file" title="new scene" aria-label="new scene"></button>
+    <button class="ib" id="b-import" data-ic="upload" title="import png layers or a scene zip" aria-label="import"></button>
+    <button class="ib" id="b-save" data-ic="download" title="save scene zip (ctrl+s)" aria-label="save scene"></button>
+    <button class="ib" id="b-undo" data-ic="undo" title="undo (ctrl+z)" aria-label="undo"></button>
+    <button class="ib" id="b-redo" data-ic="redo" title="redo (ctrl+shift+z)" aria-label="redo"></button>
+  </header>
+
+  <aside id="rail" aria-label="tools">
+    <button class="tool on" data-tool="move" data-ic="move" title="move / scale / rotate (v)" aria-label="move"></button>
+    <button class="tool" data-tool="cut" data-ic="select" title="cut out (c) - click an element, or (mode: area) a coloured area inside its outline, to lift it onto its own layer" aria-label="cut out"></button>
+    <button class="tool" data-tool="brush" data-ic="brush" title="brush (b) - [ and ] change size" aria-label="brush"></button>
+    <button class="tool" data-tool="eraser" data-ic="eraser" title="eraser (e) - [ and ] change size" aria-label="eraser"></button>
+    <button class="tool" data-tool="wand" data-ic="wand" title="remove background (w)" aria-label="remove background"></button>
+    <button class="tool" data-tool="redraw" data-ic="lasso" title="redraw (r) - draw a selection on a layer and have the ai repaint just that part" aria-label="redraw selection"></button>
+    <button class="tool" data-tool="shape" data-ic="shape" title="shapes (s) - draw a circle, square, hexagon or star in a colour; blur and glow can be added and changed any time" aria-label="shapes"></button>
+    <button class="tool" data-tool="hand" data-ic="hand" title="hand - pan (h, or hold space)" aria-label="hand"></button>
+    <button class="tool" data-tool="zoom" data-ic="zoom" title="zoom (z) - click in, shift-click out" aria-label="zoom"></button>
+  </aside>
+
+  <main id="stage">
+    <canvas id="cv"></canvas>
+    <div id="sbar"><span class="tb-t">shape</span>
+      <span class="stypes" id="stypes"><button class="sm on" data-st="circle" title="circle / oval">●</button><button class="sm" data-st="square" title="square / rectangle">■</button><button class="sm" data-st="hexagon" title="hexagon">⬢</button><button class="sm" data-st="star" title="star">★</button></span>
+      <label class="tb-l">fill<input type="color" id="scol" value="#D97757" aria-label="shape colour"></label>
+      <span class="dim">drag on the picture to draw · shift keeps it even · click for a default size</span></div>
+    <div id="tbar"><span id="tbar-t">brush</span><label class="tb-l">size<input type="range" id="bsize" min="1" max="300" value="12" aria-label="brush size"><span id="bsz">12px</span></label><label class="tb-l">colour<input type="color" id="bcol" value="#8c7b6b" aria-label="brush colour"></label></div>
+    <div id="wbar"><span class="tb-t">remove background</span>
+      <label class="tb-l">colour <button id="wcol" class="sw" title="click the picture to pick the background colour" aria-label="background colour"></button></label>
+      <button class="sm" id="wauto" title="detect from the corners">auto</button>
+      <label class="tb-l">tolerance<input type="range" id="wtol" min="0" max="100" value="18" aria-label="tolerance"><span class="v" id="wtv">18</span></label>
+      <label class="tb-l">edge trim<input type="range" id="wtrim" min="0" max="6" value="1" aria-label="edge trim"><span class="v" id="wtrv">1px</span></label>
+      <label class="tb-l ck"><input type="checkbox" id="wglob"> everywhere</label>
+      <button class="btn-clay sm" id="wapply">apply</button><button class="sm" id="wcancel">cancel</button>
+      <span class="dim" id="wmsg"></span></div>
+    <div id="cbar"><span class="tb-t">cut out</span>
+      <label class="tb-l">mode<select id="cmode" aria-label="mode"><option value="outline">outline</option><option value="colour">colour</option><option value="region">area</option></select></label>
+      <label class="tb-l">tol<input type="range" id="ctol" min="0" max="100" value="40" aria-label="tolerance"><span class="v" id="ctv">40</span></label>
+      <label class="tb-l" title="outline mode: how far to reach into the dark outline. colour mode: pixels to grow the edge">grow<input type="range" id="cout" min="0" max="20" value="6" aria-label="grow"><span class="v" id="cov">6px</span></label>
+      <label class="tb-l ck"><input type="checkbox" id="cmove" checked> leave hole</label>
+      <label class="tb-l ck" id="cattl" title="area mode: the new layer becomes a part of the original, so it moves, scales and turns with it" hidden><input type="checkbox" id="cattach" checked> attach to original</label>
+      <button class="sm" id="cadd" title="on: every click adds to the pick (for a pen with no shift key)" aria-pressed="false">＋ add</button><button class="btn-clay sm" id="ccut">cut out ↵</button><button class="sm" id="cclear">clear</button><button class="sm" id="cfill" title="ask the ai to repaint the holes">fill gaps ✻</button>
+      <span class="dim" id="cmsg">click an element</span></div>
+    <div id="rbar"><span class="tb-t">redraw</span>
+      <label class="tb-l">select<select id="rmode" aria-label="selection shape"><option value="lasso">lasso</option><option value="rect">box</option><option value="brush">brush</option></select></label>
+      <label class="tb-l" id="rszl" hidden>size<input type="range" id="rsz" min="4" max="400" value="60" aria-label="selection brush size"><span class="v" id="rszv">60px</span></label>
+      <label class="tb-l" title="grow the selection a little so the new paint blends into its surroundings">grow<input type="range" id="rgrow" min="0" max="40" value="8" aria-label="grow"><span class="v" id="rgv">8px</span></label>
+      <label class="tb-l ck" title="on: see-through parts of the layer stay see-through. off: the ai may paint into them too"><input type="checkbox" id="rkeep" checked> keep shape</label>
+      <input id="rprompt" placeholder="what should it be instead?" autocomplete="off" spellcheck="false" aria-label="what the ai should paint">
+      <button class="btn-clay sm" id="rgo">redraw ✻</button>
+      <label class="tb-l ck" title="on: the selected part is removed from this layer when you cut it out. off: the layer is left as it is"><input type="checkbox" id="rleave" checked> leave hole</label><button class="sm" id="rcut" title="copy the selected part onto its own new layer, in the same place">cut to layer</button><button class="sm" id="rclear">clear</button>
+      <span class="dim" id="rmsg">draw round the part to change (shift = add, alt = take away)</span></div>
+    <div id="empty"><div><div class="zz">z z</div><span class="row2">no layers yet</span><span class="row2">drop png layers here, or press + in the layers panel</span></div></div>
+    <div id="hint"><span id="hint-t">pencil draws · finger pans &amp; zooms</span><button id="hint-ok">got it</button></div>
+    <div id="zoombar">
+      <button id="z-out" data-ic="minus" title="zoom out" aria-label="zoom out"></button>
+      <span class="pct" id="z-pct">100%</span>
+      <button id="z-in" data-ic="plus" title="zoom in" aria-label="zoom in"></button>
+      <button id="z-100" title="actual size">1:1</button>
+      <button id="z-fit" title="fit scene (ctrl+0)">fit</button>
+    </div>
+    <button id="side-open" data-ic="chevl" title="show layers" aria-label="show layers"></button>
+  </main>
+
+  <aside id="side" aria-label="layers">
+    <div class="ph"><span class="t"><span class="d">$</span> layers · <span id="lcount">0</span></span>
+      <button class="btn-clay sm" id="b-merge" hidden title="merge the selected layers into one (ctrl+e)">merge</button>
+      <button class="ib" id="b-blank" data-ic="layer" title="new blank paint layer" aria-label="new blank paint layer"></button>
+      <button class="ib" id="b-add" data-ic="plus" title="add png layers" aria-label="add layers"></button>
+      <button class="ib" id="b-collapse" data-ic="chevr" title="collapse panel" aria-label="collapse panel"></button></div>
+    <div id="layers"></div>
+    <div id="ai"><div class="t" id="ai-t"><span class="d">$</span> ai</div><div id="ai-b">z&nbsp; z&nbsp; nothing queued</div></div>
+  </aside>
+
+  <footer id="prompt">
+    <span class="lbl">$ make:</span>
+    <input id="make" placeholder="describe the next layer…" aria-label="ai prompt" autocomplete="off" spellcheck="false">
+    <select id="gkind" class="psel" aria-label="layer type" title="element = transparent cut-out, background = fills the scene"><option value="element">element</option><option value="background">background</option></select>
+    <select id="gprov" class="psel" aria-label="image model provider" title="which ai paints the layer"><option value="openai">openai</option><option value="gemini">gemini</option></select>
+    <div class="target">place<select id="gpos" style="background:none;border:0;color:var(--text);font:inherit;font-size:12px;padding:0;outline:none;cursor:pointer"><option value="auto">auto</option><option value="above">above selected</option><option value="below">below selected</option><option value="top">very top</option><option value="bottom">very bottom</option></select></div>
+    <div class="target" id="refbox" title="which picture the ai looks at: the scene so far, an attached reference picture, both, or nothing">ref<span class="rrow"><select id="gref" aria-label="reference picture"><option value="scene">scene</option><option value="ref">reference</option><option value="both">scene + ref</option><option value="layer">selected layer</option><option value="layerref">layer + ref</option><option value="none">none</option></select><button class="sm" id="gref-set" title="attach a reference picture (png / jpg)" aria-label="attach reference">＋</button><img id="gref-img" alt="" hidden></span></div>
+    <label class="target" id="whitebox" title="element comes out white / light grey with its dark outline, so you can recolour it with tint (or in your game code)" style="cursor:pointer;flex-direction:row;align-items:center;gap:0"><input type="checkbox" id="gwhite" style="accent-color:var(--clay,#D97757);margin:0 4px 0 0;cursor:pointer">white</label>
+    <input type="file" id="reffile" accept="image/*" hidden>
+    <button class="sm" id="gplan-b" title="paste a layer plan (json) made with Claude: review the list, then it queues every layer into its box">☰ plan</button>
+    <button class="sm" id="gbox-b" title="draw a box on the scene: the ai paints the element to fit it, then the layer lands exactly there. move, resize and turn the box first">▭ box</button>
+    <button class="gen" id="gen-stop" hidden title="stop painting and clear the queue">■ stop</button>
+    <button class="btn-clay" id="gen-go" title="generate (enter)">generate ↵</button>
+  </footer>
+
+  <div id="status"><span class="dot">●</span><span id="st-l">idle</span><span class="r" id="st-r"></span></div>
+</div>
+
+<input type="file" id="file" accept="image/png,image/*,.png,.zip,application/zip" multiple hidden>
+<div id="modal" role="dialog" aria-modal="true"></div>
+<div id="toast" role="status"></div>
+<div id="drop"><div>drop png layers or a scene zip</div></div>
+
+<script>
+(()=>{
+'use strict';
+const $=(s,r=document)=>r.querySelector(s);
+const $$=(s,r=document)=>[...r.querySelectorAll(s)];
+/* browsers can throw away a canvas's picture when graphics memory runs low (it then shows blank until redrawn).
+   every 2d canvas is watched so layers can be rebuilt from their saved pngs */
+const _gc=HTMLCanvasElement.prototype.getContext;
+HTMLCanvasElement.prototype.getContext=function(t,o){
+  if(t==='2d'&&!this.__lfw){this.__lfw=1;
+    this.addEventListener('contextlost',()=>{window.__lfCtxLost&&window.__lfCtxLost(this)});
+    this.addEventListener('contextrestored',()=>{window.__lfCtxBack&&window.__lfCtxBack(this)});}
+  return _gc.call(this,t,o);
+};
+
+/* ---------- icons (1.5px line) ---------- */
+const P={
+move:'<path d="M12 3v18M3 12h18"/><path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>',
+select:'<rect x="4" y="4" width="16" height="16" rx="1.5" stroke-dasharray="3 3"/>',
+brush:'<path d="M18 3l3 3-9 9-3-3 9-9z"/><path d="M9 12c-3 0-4 2-4 4 0 2-1 3-2 4 3 1 8 0 8-5"/>',
+eraser:'<path d="M3 16l9-10 8 7-6 7H8z"/><path d="M8 20h12"/>',
+lasso:'<path d="M12 5c5 0 9 2 9 5s-4 5-9 5-9-2-9-5 4-5 9-5z"/><path d="M8 15c0 2 1 4 3 5"/>',
+hand:'<path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11m0-1V4.5a1.5 1.5 0 0 1 3 0V11m0-4.5a1.5 1.5 0 0 1 3 0V14c0 4-2 7-6 7-3 0-4.5-1.5-6.5-5l-1.3-2.4a1.5 1.5 0 0 1 2.6-1.4L8 14"/>',
+zoom:'<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M11 8v6M8 11h6"/>',
+eye:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+eyeoff:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 20L20 4"/>',
+lock:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+unlock:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.6-1.7"/>',
+plus:'<path d="M12 5v14M5 12h14"/>',
+minus:'<path d="M5 12h14"/>',
+undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
+redo:'<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>',
+chevr:'<path d="M9 5l7 7-7 7"/>',
+chevl:'<path d="M15 5l-7 7 7 7"/>',
+download:'<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>',
+upload:'<path d="M12 16V5M7 9l5-5 5 5M5 20h14"/>',
+trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+up:'<path d="M6 14l6-6 6 6"/>',
+down:'<path d="M6 10l6 6 6-6"/>',
+file:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
+copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+pivot:'<circle cx="12" cy="12" r="3"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/>',
+layer:'<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
+shape:'<circle cx="8" cy="9" r="4.5"/><rect x="11" y="11" width="9" height="9" rx="1.5"/>',
+wand:'<path d="M4 20L15 9"/><path d="M14 3l1 2.3 2.3 1-2.3 1-1 2.3-1-2.3-2.3-1 2.3-1z"/><path d="M19 12l.7 1.3 1.3.7-1.3.7-.7 1.3-.7-1.3-1.3-.7 1.3-.7z"/>',
+settings:'<path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/>',
+x:'<path d="M6 6l12 12M18 6L6 18"/>',
+grip:'<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>'
+};
+const ic=(n,s=20)=>`<svg class="ic" viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`;
+$$('[data-ic]').forEach(el=>el.insertAdjacentHTML('afterbegin',ic(el.dataset.ic)));
+
+/* ---------- state ---------- */
+const brush={size:12,color:'#8c7b6b'};
+const state={name:'scene-01',W:3840,H:2160,layers:[],sel:null,tool:'move',autoFit:true,busy:0};
+const view={x:0,y:0,z:0.3};
+const store=new Map();            // id -> {blob,pv,mask,mw,mh,w,h}
+let idn=0;
+const newId=()=>'l'+(++idn)+Math.random().toString(36).slice(2,5);
+const sel=()=>state.layers.find(l=>l.id===state.sel)||null;
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const D2R=Math.PI/180;
+const fmtSize=b=>b>=1048576?(b/1048576).toFixed(1)+' MB':Math.max(1,Math.round(b/1024))+' KB';
+const slug=s=>(s||'layer').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'layer';
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- toast / busy ---------- */
+let toastT=0;
+function toast(msg,kind){const t=$('#toast');t.textContent=msg;t.className='show '+(kind||'');clearTimeout(toastT);toastT=setTimeout(()=>{t.className=''},kind==='err'?6000:3200)}
+function setBusy(d){state.busy=Math.max(0,state.busy+d);$('#logo').classList.toggle('busy',state.busy>0);$('#status').classList.toggle('busy',state.busy>0);statusBar()}
+
+/* ---------- transforms ---------- */
+function l2s(L,lx,ly){
+  const px=L.px*L.w,py=L.py*L.h,dx=(lx-px)*L.scale,dy=(ly-py)*L.scale,a=L.rot*D2R,c=Math.cos(a),s=Math.sin(a);
+  return [L.x+px+dx*c-dy*s, L.y+py+dx*s+dy*c];
+}
+function s2l(L,sx,sy){
+  const px=L.px*L.w,py=L.py*L.h,dx=sx-(L.x+px),dy=sy-(L.y+py),a=L.rot*D2R,c=Math.cos(a),s=Math.sin(a);
+  return [px+(dx*c+dy*s)/L.scale, py+(-dx*s+dy*c)/L.scale];
+}
+const toScreen=([x,y])=>({x:view.x+x*view.z,y:view.y+y*view.z});
+const toScene=p=>({x:(p.x-view.x)/view.z,y:(p.y-view.y)/view.z});
+function applyM(c,L){
+  c.translate(L.x+L.px*L.w,L.y+L.py*L.h);c.rotate(L.rot*D2R);c.scale(L.scale,L.scale);c.translate(-L.px*L.w,-L.py*L.h);
+}
+
+/* ---------- canvas ---------- */
+const cv=$('#cv'),ctx=cv.getContext('2d');
+let cw=0,ch=0,dpr=1,raf=0;
+const tile=document.createElement('canvas');tile.width=tile.height=32;
+{const t=tile.getContext('2d');t.fillStyle='#262626';t.fillRect(0,0,32,32);t.fillStyle='#2d2d2d';t.fillRect(0,0,16,16);t.fillRect(16,16,16,16)}
+function resize(){
+  const r=$('#stage').getBoundingClientRect();dpr=Math.min(window.devicePixelRatio||1,2);
+  cw=r.width;ch=r.height;cv.width=Math.max(1,Math.round(cw*dpr));cv.height=Math.max(1,Math.round(ch*dpr));
+  cv.style.width=cw+'px';cv.style.height=ch+'px';
+  if(state.autoFit)fit(true);draw();
+}
+function fit(silent){
+  if(!cw||!ch)return;
+  view.z=clamp(Math.min((cw-72)/state.W,(ch-72)/state.H),0.02,8);
+  view.x=(cw-state.W*view.z)/2;view.y=(ch-state.H*view.z)/2;
+  state.autoFit=true;if(!silent)draw();statusBar();
+}
+function zoomAt(f,sx,sy){
+  const z0=view.z,z1=clamp(z0*f,0.03,8);if(z1===z0)return;
+  view.x=sx-(sx-view.x)*z1/z0;view.y=sy-(sy-view.y)*z1/z0;view.z=z1;state.autoFit=false;draw();statusBar();
+}
+function draw(){if(!raf)raf=requestAnimationFrame(()=>{raf=0;paint()})}
+function layerCorners(L){return [[0,0],[L.w,0],[L.w,L.h],[0,L.h]].map(p=>toScreen(l2s(L,p[0],p[1])))}
+function handlesFor(L){
+  const c=layerCorners(L),tm=toScreen(l2s(L,L.w/2,0)),bm=toScreen(l2s(L,L.w/2,L.h));
+  let dx=tm.x-bm.x,dy=tm.y-bm.y;const n=Math.hypot(dx,dy)||1;dx/=n;dy/=n;
+  return {c,rot:{x:tm.x+dx*34,y:tm.y+dy*34},top:tm,pivot:toScreen(l2s(L,L.px*L.w,L.py*L.h))};
+}
+/* ---------- tint (recolour a white layer in code; the game applies the same tint) ---------- */
+const TINTS=[['red','#E5484D'],['blue','#3E8EF7'],['green','#3FB950'],['yellow','#F5C518']];
+// the colours "copies" uses: Stewart picks them (swatches are colour pickers), remembered in this browser; starts as the four above
+var copyCols=(()=>{try{const a=JSON.parse(localStorage.getItem('lf-copycols'));if(Array.isArray(a)&&a.length&&a.length<=8&&a.every(c=>/^#[0-9a-f]{6}$/i.test(c)))return a}catch(_){}return TINTS.map(t=>t[1])})();
+function saveCopyCols(){try{localStorage.setItem('lf-copycols',JSON.stringify(copyCols))}catch(_){}}
+const tintSig=L=>L.tint?L.tint+'|'+(L.tm||'multiply')+'|'+(L.ta==null?1:L.ta):'';
+function tintedSurface(L,r,src){ // returns src itself when the layer has no tint
+  if(!L.tint||!src||!src.width||!src.height)return src;
+  const sig=tintSig(L),isPv=r&&src===r.pv;
+  if(isPv){const t=r.tc;if(t&&t.pv===src&&t.sig===sig&&t.ver===(r.ver|0)&&t.w===src.width&&t.h===src.height)return t.cv}
+  const w=src.width,h=src.height,T=document.createElement('canvas');T.width=w;T.height=h;const x=T.getContext('2d');
+  x.drawImage(src,0,0);x.globalCompositeOperation=(L.tm==='color')?'color':'multiply';x.fillStyle=L.tint;x.fillRect(0,0,w,h);
+  x.globalCompositeOperation='destination-in';x.drawImage(src,0,0);
+  let out=T;const a=L.ta==null?1:L.ta;
+  if(a<1){out=document.createElement('canvas');out.width=w;out.height=h;const o=out.getContext('2d');o.drawImage(src,0,0);o.globalAlpha=a;o.drawImage(T,0,0);T.width=T.height=0}
+  if(isPv)r.tc={cv:out,pv:src,sig,ver:r.ver|0,w,h};
+  return out;
+}
+let lastDrawErr=0;
+function drawProblem(L,err){
+  console.error('could not draw layer',L.name,err);
+  if(Date.now()-lastDrawErr>8000){lastDrawErr=Date.now();toast('layer "'+L.name+'" could not be drawn - rebuilding it from its saved picture','warn')}
+  healLayer(L.id);
+}
+async function healLayer(id,force){
+  const r=store.get(id);if(!r||r.healing||!r.blob)return;r.healing=true;
+  try{
+    if(r.pending)await r.pending;
+    const bm=await createImageBitmap(r.blob),k=Math.min(1,2048/Math.max(bm.width,bm.height));
+    const full=r.pv&&r.pv.width===r.w&&r.pv.height===r.h&&!force?true:false;
+    const w=full?bm.width:Math.max(1,Math.round(bm.width*k)),h=full?bm.height:Math.max(1,Math.round(bm.height*k));
+    const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(bm,0,0,w,h);bm.close&&bm.close();
+    if(!(cs&&cs.id===id)&&!(sess&&sess.id===id))r.pv=c;
+    Object.assign(r,maskFrom(c));lastStruct='';
+  }catch(err){console.error('rebuild failed',err)}
+  finally{r.healing=false;draw();renderLayers()}
+}
+let integ=null;
+function integrityCheck(){ // cheap look at every layer: if one should have content but its canvas is blank, rebuild it
+  if(!integ){integ=document.createElement('canvas');integ.width=integ.height=24}
+  const x=integ.getContext('2d',{willReadFrequently:true});let n=0;
+  for(const [id,r] of store){
+    if(r.healing||!r.mask||!r.pv||(cs&&cs.id===id)||(sess&&sess.id===id))continue;
+    let has=false;for(let i=0;i<r.mask.length;i+=7)if(r.mask[i]>0){has=true;break}
+    if(!has)continue;
+    try{x.clearRect(0,0,24,24);x.drawImage(r.pv,0,0,24,24);const d=x.getImageData(0,0,24,24).data;let a=0;for(let i=3;i<d.length;i+=4)a|=d[i];
+      if(!a){n++;healLayer(id,true)}}catch(_){n++;healLayer(id,true)}
+  }
+  if(n)toast('a layer had gone blank - rebuilt '+n+' from saved pictures','warn');
+}
+addEventListener('focus',()=>setTimeout(integrityCheck,200));
+function healAll(){[...store.keys()].forEach(id=>healLayer(id,true));toast('redrew every layer from its saved picture','good')}
+window.__lfCtxLost=c=>{console.warn('a canvas lost its picture');if(c===cv)return;for(const [id,r] of store)if(r.pv===c)setTimeout(()=>healLayer(id),50)};
+window.__lfCtxBack=c=>{if(c===cv)draw()};
+window.addEventListener('error',e=>{try{console.error(e.error||e.message);toast('something went wrong: '+String(e.message||e.error).slice(0,80)+' (click the ✻ to redraw all layers)','err')}catch(_){}});
+window.addEventListener('unhandledrejection',e=>{console.error(e.reason);});
+$('#logo').style.cursor='pointer';$('#logo').title='click to redraw every layer from its saved picture';$('#logo').addEventListener('click',healAll);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){draw();setTimeout(integrityCheck,200)}});
+function paint(){
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle='#202020';ctx.fillRect(0,0,cw,ch);
+  const sw=state.W*view.z,sh=state.H*view.z;
+  ctx.fillStyle=ctx.createPattern(tile,'repeat');ctx.fillRect(view.x,view.y,sw,sh);
+  ctx.save();ctx.translate(view.x,view.y);ctx.scale(view.z,view.z);
+  ctx.beginPath();ctx.rect(0,0,state.W,state.H);ctx.clip();
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  for(const L of state.layers){
+    if(!L.vis)continue;const r=store.get(L.id);if(!r)continue;
+    ctx.save();
+    try{ctx.globalAlpha=L.op;applyM(ctx,L);if(!r.pv||!r.pv.width||!r.pv.height)throw new Error('empty picture');ctx.drawImage(tintedSurface(L,r,r.pv),0,0,L.w,L.h)}
+    catch(err){drawProblem(L,err)}
+    finally{ctx.restore()}
+  }
+  ctx.restore();
+  ctx.strokeStyle='#4A4741';ctx.lineWidth=1;ctx.strokeRect(Math.round(view.x)-.5,Math.round(view.y)-.5,Math.round(sw)+1,Math.round(sh)+1);
+  const run=jobs.find(j=>j.status==='running');
+  if(run){
+    ctx.save();ctx.fillStyle='rgba(58,42,34,.28)';ctx.fillRect(view.x,view.y,sw,sh);
+    ctx.strokeStyle='#D97757';ctx.lineWidth=1.5;ctx.setLineDash([8,6]);ctx.strokeRect(view.x+10,view.y+10,sw-20,sh-20);ctx.setLineDash([]);
+    const ty=view.y+10+(sh-20)*((performance.now()%2400)/2400);ctx.beginPath();ctx.moveTo(view.x+10,ty);ctx.lineTo(view.x+sw-10,ty);ctx.stroke();
+    ctx.fillStyle='#F0B49A';ctx.font='15px ui-monospace,Consolas,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('✻ painting layer: '+run.name+'…',view.x+sw/2,view.y+sh/2);ctx.restore();requestAnimationFrame(draw);
+  }
+  const L=sel();
+  if(L&&state.tool==='move'&&L.vis){
+    const h=handlesFor(L);
+    ctx.strokeStyle='#D97757';ctx.lineWidth=1.5;ctx.setLineDash(L.lock?[5,4]:[]);
+    ctx.beginPath();h.c.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.stroke();ctx.setLineDash([]);
+    if(!L.lock){
+      ctx.fillStyle='#141413';
+      h.c.forEach(p=>{ctx.beginPath();ctx.rect(p.x-5,p.y-5,10,10);ctx.fill();ctx.stroke()});
+      ctx.beginPath();ctx.moveTo(h.top.x,h.top.y);ctx.lineTo(h.rot.x,h.rot.y);ctx.stroke();
+      ctx.beginPath();ctx.arc(h.rot.x,h.rot.y,6,0,7);ctx.fill();ctx.stroke();
+      ctx.beginPath();ctx.arc(h.pivot.x,h.pivot.y,6,0,7);ctx.fillStyle='#D97757';ctx.fill();
+      ctx.strokeStyle='#141413';ctx.beginPath();ctx.moveTo(h.pivot.x-9,h.pivot.y);ctx.lineTo(h.pivot.x+9,h.pivot.y);ctx.moveTo(h.pivot.x,h.pivot.y-9);ctx.lineTo(h.pivot.x,h.pivot.y+9);ctx.stroke();
+    }
+    const tl=h.c.reduce((a,p)=>p.y<a.y?p:a,h.c[0]);
+    const label=(L.ai?'✻ ':'')+L.name+' · '+L.w+'×'+L.h;
+    ctx.font='12px ui-monospace,Consolas,monospace';const tw=ctx.measureText(label).width+16;
+    ctx.fillStyle='#3A2A22';ctx.fillRect(tl.x,tl.y-26,tw,20);ctx.fillStyle='#F0B49A';ctx.textBaseline='middle';ctx.fillText(label,tl.x+8,tl.y-16);
+  }
+  if(state.tool==='redraw')rdOverlay();
+  if(gb)gbPaint();
+  if(sdrag)shapePreview();
+  if(hover&&(state.tool==='brush'||state.tool==='eraser')){
+    const rr=Math.max(1.5,brush.size*view.z/2);ctx.lineWidth=1;
+    ctx.strokeStyle='rgba(20,20,19,.85)';ctx.beginPath();ctx.arc(hover.x,hover.y,rr+1,0,7);ctx.stroke();
+    ctx.strokeStyle='#E8E6DC';ctx.beginPath();ctx.arc(hover.x,hover.y,rr,0,7);ctx.stroke();
+  }
+}
+
+/* ---------- history ---------- */
+const U=[],R=[];let lastKey=null,lastT=0;
+const snapshot=()=>JSON.stringify({layers:state.layers,sel:state.sel});
+function pushUndo(){U.push(snapshot());if(U.length>100)U.shift();R.length=0}
+function pushUndoPx(id,blob){U.push({px:id,blob});if(U.length>100)U.shift();R.length=0}
+function restore(s){const o=JSON.parse(s);state.layers=o.layers;state.sel=o.sel;tcache.clear();changed()}
+async function applyBlob(id,blob){
+  const r=store.get(id);if(!r)return;const bm=await createImageBitmap(blob),c=document.createElement('canvas');c.width=bm.width;c.height=bm.height;r.w=bm.width;r.h=bm.height;
+  c.getContext('2d').drawImage(bm,0,0);bm.close&&bm.close();r.pv=c;r.blob=blob;Object.assign(r,maskFrom(c));savedBlobs.delete(id);lastStruct='';tcache.clear();changed();
+}
+async function undo(){
+  if(sess){cancelWand();setTool('move')}cancelCut();
+  await flushPending();if(!U.length)return toast('nothing to undo');lastKey=null;const e=U.pop();
+  if(typeof e==='string'){R.push(snapshot());restore(e)}else{R.push({px:e.px,blob:store.get(e.px).blob,meta:e.meta?snapshot():undefined});if(e.meta)restore(e.meta);await applyBlob(e.px,e.blob)}
+}
+async function redo(){
+  if(sess){cancelWand();setTool('move')}cancelCut();
+  await flushPending();if(!R.length)return toast('nothing to redo');lastKey=null;const e=R.pop();
+  if(typeof e==='string'){U.push(snapshot());restore(e)}else{U.push({px:e.px,blob:store.get(e.px).blob,meta:e.meta?snapshot():undefined});if(e.meta)restore(e.meta);await applyBlob(e.px,e.blob)}
+}
+function edit(fn,key){
+  const t=performance.now();
+  if(!(key&&key===lastKey&&t-lastT<800))pushUndo();
+  lastKey=key;lastT=t;fn();changed();
+}
+
+/* ---------- layer panel ---------- */
+const LP=$('#layers');let lastStruct='';
+function structKey(){return state.layers.map(l=>[l.id,l.name,l.vis?1:0,l.lock?1:0,l.ai?1:0,l.par||'',l.shape?l.shape.type+(shapeOk(l)?'+':'-'):''].join(':')).join('|')+'#'+state.sel+'#'+[...msel].join(',')+'#'+jobs.map(j=>j.id+j.status).join(',')}
+function drawThumb(c,r,L){
+  const t=c.getContext('2d');t.clearRect(0,0,c.width,c.height);
+  if(!r||!r.pv||!r.pv.width||!r.pv.height)return;
+  const src=L?tintedSurface(L,r,r.pv):r.pv;
+  const k=Math.min(c.width/r.pv.width,c.height/r.pv.height),w=r.pv.width*k,h=r.pv.height*k;
+  t.imageSmoothingQuality='high';t.drawImage(src,(c.width-w)/2,(c.height-h)/2,w,h);
+}
+function renderLayers(){
+  if(typeof fs!=='undefined'&&fs&&sel()?.id!==fs.id)feelCancel();
+  $('#lcount').textContent=state.layers.length;
+  {const n=selIds().length;const mb=$('#b-merge');mb.hidden=n<2;mb.textContent='merge '+n}
+  $('#empty').classList.toggle('show',!state.layers.length);
+  const key=structKey();
+  if(key===lastStruct){syncInspector();return}
+  lastStruct=key;
+  const keepScroll=LP.scrollTop;
+  LP.innerHTML='';
+  const live=jobs.filter(j=>j.status==='queued'||j.status==='running');
+  live.filter(j=>!j.afterId||!state.layers.some(l=>l.id===j.afterId)).forEach(j=>LP.appendChild(jobRow(j)));
+  [...state.layers].reverse().forEach(L=>{
+    const r=store.get(L.id);const isSel=L.id===state.sel;
+    const row=document.createElement('div');
+    row.className='row'+(isSel?' sel':(msel.size>=2&&msel.has(L.id)?' multi':''))+(L.vis?'':' hidden-l')+(L.par&&state.layers.some(p=>p.id===L.par)?' child':'');row.dataset.id=L.id;
+    row.innerHTML=`<div class="r1"><button class="grip" data-act="grip" aria-label="drag to reorder" title="drag to reorder">${ic('grip')}</button><canvas class="thumb" width="96" height="64"></canvas>
+      <div class="meta"><span class="nm">${esc(L.name)}${L.ai?' <span class="star">✻</span>':''}</span><span class="sub">${L.ai?'':'hand · '}<span class="opv">${Math.round(L.op*100)}%</span>${parTag(L)}</span></div>
+      <button class="ib" data-act="vis" aria-label="${L.vis?'hide':'show'} layer" title="${L.vis?'hide':'show'}">${ic(L.vis?'eye':'eyeoff')}</button>
+      <button class="ib" data-act="lock" aria-label="${L.lock?'unlock':'lock'} layer" title="${L.lock?'unlock':'lock'}">${ic(L.lock?'lock':'unlock')}</button></div>`;
+    if(r){drawThumb($('canvas',row),r,L);row.dataset.ts=tintSig(L)}
+    if(isSel){
+      const ins=document.createElement('div');ins.className='insp';
+      ins.innerHTML=shapeInspector(L)+`<div class="line"><label>opacity</label><input type="range" min="0" max="100" step="1" data-f="op" aria-label="opacity"><span class="pv" data-pv="op"></span></div>
+      <div class="line"><label>tint</label><input type="color" class="tcol" data-tint="color" value="#ffffff" aria-label="tint colour" title="recolour this layer (works best on white or light grey art)"><select class="tmode" data-tint="mode" aria-label="tint mode" title="multiply keeps shading and outlines; colour keeps brightness and swaps the hue"><option value="multiply">multiply</option><option value="color">colour</option></select><button class="ib sm" data-tint="clear" title="remove the tint" aria-label="remove tint">${ic('x')}</button></div>
+      <div class="line"><label>mix</label><input type="range" min="0" max="100" step="1" data-tint="amt" aria-label="tint strength"></div>
+      <div class="line tdots"><label></label>${copyCols.map((c,i)=>`<input type="color" class="tdot" data-tint="swatch" data-i="${i}" value="${c}" title="tap to pick this colour (it is used by the copies button; right-click or double-tap a swatch to tint this layer with it)" aria-label="copy colour ${i+1}">`).join('')}<button class="sm" data-tint="addcol" title="add another colour" aria-label="add a colour">＋</button>${copyCols.length>1?'<button class="sm" data-tint="delcol" title="remove the last colour" aria-label="remove a colour">−</button>':''}<button class="sm" data-tint="variants" title="make a copy of this layer in each of these colours">${copyCols.length} cop${copyCols.length>1?'ies':'y'}</button></div>
+      <div class="line"><label>feel</label><input type="range" min="-5" max="5" step="0.5" value="0" data-sharp="v" aria-label="softer or crisper" title="left = softer (blur), right = crisper (sharpen). code only, free. press apply to keep it"><span class="dim" data-sharp="n" style="min-width:30px;text-align:right">0</span><button class="sm" data-sharp="go" title="keep this look (ctrl+z undoes it)">apply</button></div>
+      <div class="grid4">
+        <label class="fld">x<input type="number" step="1" data-f="x" aria-label="x position"></label>
+        <label class="fld">y<input type="number" step="1" data-f="y" aria-label="y position"></label>
+        <label class="fld">scale<input type="number" step="1" min="1" max="5000" data-f="scale" aria-label="scale percent"></label>
+        <label class="fld">rot<input type="number" step="1" data-f="rot" aria-label="rotation degrees"></label>
+      </div>
+      <div class="acts">
+        <button data-act="up" title="move layer up" aria-label="move layer up">${ic('up')}</button>
+        <button data-act="down" title="move layer down" aria-label="move layer down">${ic('down')}</button>
+        <button data-act="ai" class="${L.ai?'on':''}" title="mark as ai-made" aria-pressed="${L.ai}">✻ ai</button>
+        <button data-act="pivot" title="reset pivot to centre" aria-label="reset pivot">${ic('pivot')}</button>
+        <button data-act="wand" title="remove background (w)" aria-label="remove background">${ic('wand')}</button>
+        <button data-act="autobg" title="remove the flat background from this layer, or from every selected layer, in one go (no preview)" aria-label="auto remove background">▨ auto bg</button>
+        <button data-act="dup" title="duplicate" aria-label="duplicate">${ic('copy')}</button>
+        <button data-act="attach" title="${L.par?'detach this layer from its parent':'attach to a parent layer (select several to attach them all): the parent drags, scales and turns them along'}" aria-label="attach to parent">${L.par?'⛓ detach':'⛓ attach'}</button>
+        <button data-act="mergedown" title="merge with the layer below (ctrl+e)" aria-label="merge down">↧ merge</button>
+        <button data-act="sharper" title="ask the ai to redraw this layer sharper at a higher resolution, same shape and place (anything typed in the prompt bar is added as an instruction)" aria-label="make sharper">✻ sharper</button>
+        <button data-act="del" title="delete layer (del)" aria-label="delete layer">${ic('trash')}</button>
+      </div>`;
+      row.appendChild(ins);
+    }
+    live.filter(j=>j.afterId===L.id).forEach(j=>LP.appendChild(jobRow(j)));
+    LP.appendChild(row);
+  });
+  LP.scrollTop=keepScroll;
+  syncInspector();
+}
+function syncInspector(){
+  const act=document.activeElement;
+  $$('.row',LP).forEach(row=>{const L=state.layers.find(l=>l.id===row.dataset.id);if(!L)return;const o=$('.opv',row);if(o)o.textContent=Math.round(L.op*100)+'%'});
+  const L=sel();if(!L)return;
+  const set=(f,v)=>{const el=$(`[data-f="${f}"]`,LP);if(el&&el!==act)el.value=v};
+  set('op',Math.round(L.op*100));set('x',Math.round(L.x));set('y',Math.round(L.y));set('scale',Math.round(L.scale*1000)/10);set('rot',Math.round(L.rot*10)/10);
+  const pv=$('[data-pv="op"]',LP);if(pv)pv.textContent=Math.round(L.op*100)+'%';
+  if(L.shape&&typeof shapeSync==='function')shapeSync(L,act);
+  const tc=$('[data-tint="color"]',LP),tm=$('[data-tint="mode"]',LP),ta=$('[data-tint="amt"]',LP);
+  if(tc&&tc!==act)tc.value=L.tint||'#ffffff';if(tm&&tm!==act)tm.value=L.tm||'multiply';if(ta&&ta!==act)ta.value=Math.round((L.ta==null?1:L.ta)*100);
+  $$('.row',LP).forEach(row=>{const l=state.layers.find(q=>q.id===row.dataset.id);if(!l)return;const sg=tintSig(l);if(row.dataset.ts!==sg){row.dataset.ts=sg;const c=$('canvas',row),rr=store.get(l.id);if(c&&rr)drawThumb(c,rr,l)}});
+}
+function statusBar(){
+  const n=state.layers.length;
+  $('#st-l').textContent=`${state.busy?'working':'idle'} · ${state.name} · ${state.W}×${state.H} · ${n} layer${n===1?'':'s'} · ${Math.round(view.z*100)}%`;
+  $('#z-pct').textContent=Math.round(view.z*100)+'%';
+  const L=sel();
+}
+
+LP.addEventListener('click',e=>{
+  const jx=e.target.closest('[data-jobx]');if(jx){cancelJob(+jx.dataset.jobx);return}
+  const row=e.target.closest('.row');if(!row||!row.dataset.id)return;const id=row.dataset.id;
+  const btn=e.target.closest('[data-act]');const L=state.layers.find(l=>l.id===id);if(!L)return;
+  if(!btn){
+    if(e.target.closest('.insp'))return;
+    if(pickPar){finishPick(id);return}
+    if(e.ctrlKey||e.metaKey){toggleMulti(id);return}
+    if(e.shiftKey&&state.sel&&state.sel!==id){rangeMulti(id);return}
+    if(msel.size){msel.clear();lastStruct=''}
+    if(state.sel!==id){state.sel=id;changed()}else renderLayers();
+    return}
+  const act=btn.dataset.act;
+  if(act==='vis')edit(()=>{L.vis=!L.vis});
+  else if(act==='lock')edit(()=>{L.lock=!L.lock});
+  else if(act==='up')moveLayer(id,1);
+  else if(act==='down')moveLayer(id,-1);
+  else if(act==='ai')edit(()=>{L.ai=!L.ai});
+  else if(act==='pivot')edit(()=>setPivot(L,.5,.5));
+  else if(act==='dup')dupLayer(id);
+  else if(act==='attach')L.par?detachLayer(id):startPick();
+  else if(act==='mergedown')mergeDown(id);
+  else if(act==='sharper')enqueueUpscale(id);
+  else if(act==='wand')setTool('wand');
+  else if(act==='autobg')autoBgSel();
+  else if(act==='del')removeLayer(id);
+});
+LP.addEventListener('dblclick',e=>{
+  const nm=e.target.closest('.nm');if(!nm)return;const row=nm.closest('.row'),L=state.layers.find(l=>l.id===row.dataset.id);if(!L)return;
+  const inp=document.createElement('input');inp.className='nm-in';inp.value=L.name;inp.maxLength=40;nm.replaceWith(inp);inp.focus();inp.select();
+  const done=ok=>{if(!inp.isConnected)return;const v=inp.value.trim();if(ok&&v&&v!==L.name)edit(()=>{L.name=v});else{lastStruct='';renderLayers()}};
+  inp.addEventListener('keydown',ev=>{ev.stopPropagation();if(ev.key==='Enter')done(true);if(ev.key==='Escape')done(false)});
+  inp.addEventListener('blur',()=>done(true));
+});
+LP.addEventListener('input',e=>{
+  const f=e.target.dataset.f;if(!f)return;const L=sel();if(!L)return;const v=parseFloat(e.target.value);
+  if(f==='op'){edit(()=>{L.op=clamp(v/100,0,1)},'op'+L.id);return}
+  if(!isFinite(v))return;
+  if(f==='x')edit(()=>{L.x=Math.round(v)},'x'+L.id);
+  else if(f==='y')edit(()=>{L.y=Math.round(v)},'y'+L.id);
+  else if(f==='scale'&&v>0)edit(()=>{L.scale=clamp(v/100,0.01,50)},'s'+L.id);
+  else if(f==='rot')edit(()=>{L.rot=v},'r'+L.id);
+});
+LP.addEventListener('keydown',e=>{if(e.target.matches('input[type=number]')&&e.key==='Enter')e.target.blur()});
+// drag to reorder (mouse; on touch use the up/down buttons)
+let dragId=null;
+LP.addEventListener('pointerdown',e=>{const g=e.target.closest('[data-act="grip"]');if(g&&e.pointerType==='mouse')g.closest('.row').draggable=true});
+LP.addEventListener('dragstart',e=>{const row=e.target.closest('.row');if(!row||!row.draggable){e.preventDefault();return}dragId=row.dataset.id;row.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/x-layer',dragId)});
+LP.addEventListener('dragover',e=>{if(!dragId)return;e.preventDefault();const row=e.target.closest('.row');$$('.row.over',LP).forEach(r=>r.classList.remove('over'));if(row&&row.dataset.id!==dragId)row.classList.add('over')});
+LP.addEventListener('dragend',()=>{dragId=null;$$('.row',LP).forEach(r=>{r.draggable=false;r.classList.remove('over','dragging')})});
+LP.addEventListener('drop',e=>{
+  if(!dragId)return;e.preventDefault();const row=e.target.closest('.row');const from=dragId;dragId=null;
+  $$('.row',LP).forEach(r=>{r.draggable=false;r.classList.remove('over','dragging')});
+  if(!row||row.dataset.id===from)return;
+  edit(()=>{const a=state.layers.findIndex(l=>l.id===from),b=state.layers.findIndex(l=>l.id===row.dataset.id);const [it]=state.layers.splice(a,1);state.layers.splice(b,0,it)});
+});
+
+/* ---------- multi-select + merge ---------- */
+const msel=new Set();
+function selIds(){
+  const ex=state.layers.filter(l=>msel.has(l.id)).map(l=>l.id);
+  return ex.length>=2?ex:(state.sel&&state.layers.some(l=>l.id===state.sel)?[state.sel]:[]);
+}
+function toggleMulti(id){
+  const ids=new Set(selIds());
+  if(ids.has(id)){ids.delete(id);if(state.sel===id)state.sel=[...ids][0]||null}else{ids.add(id);state.sel=id}
+  msel.clear();if(ids.size>=2)ids.forEach(i=>msel.add(i));
+  if(ids.size===1)state.sel=[...ids][0];
+  lastStruct='';changed();
+}
+function rangeMulti(id){
+  const a=state.layers.findIndex(l=>l.id===state.sel),b=state.layers.findIndex(l=>l.id===id);if(a<0||b<0)return;
+  msel.clear();for(let i=Math.min(a,b);i<=Math.max(a,b);i++)msel.add(state.layers[i].id);
+  lastStruct='';changed();
+}
+function mergeDown(id){
+  const i=state.layers.findIndex(l=>l.id===id);
+  if(i<=0)return toast('there is no layer below this one to merge with','warn');
+  return mergeLayers([id,state.layers[i-1].id]);
+}
+let merging=false;
+async function mergeLayers(ids){
+  if(merging)return;merging=true;
+  try{
+    const all=state.layers.filter(l=>ids.includes(l.id)&&store.get(l.id));
+    const ls=all.filter(l=>l.vis),skipped=all.length-ls.length;
+    if(ls.length<2)return toast(skipped?'hidden layers are not merged - show at least two layers first':'select at least two layers to merge','warn');
+    await flushPending();
+    for(const L of ls){const r=store.get(L.id);if(r.pv.width!==r.w||r.pv.height!==r.h)await upgradePv(r)}
+    let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+    for(const L of ls)for(const [cx,cy] of [[0,0],[L.w,0],[L.w,L.h],[0,L.h]]){const [sx,sy]=l2s(L,cx,cy);x0=Math.min(x0,sx);y0=Math.min(y0,sy);x1=Math.max(x1,sx);y1=Math.max(y1,sy)}
+    x0=Math.floor(x0);y0=Math.floor(y0);const W=Math.ceil(x1)-x0,H=Math.ceil(y1)-y0;
+    if(W<1||H<1)return;
+    if(W*H>70e6)return toast('those layers cover too large an area to merge ('+W+'×'+H+')','warn');
+    const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d',{willReadFrequently:true});
+    x.imageSmoothingQuality='high';x.translate(-x0,-y0);
+    for(const L of ls){const r=store.get(L.id);x.save();x.globalAlpha=L.op;applyM(x,L);x.drawImage(tintedSurface(L,r,r.pv),0,0,L.w,L.h);x.restore()}
+    x.setTransform(1,0,0,1,0,0);
+    const d=x.getImageData(0,0,W,H).data;let tx0=W,ty0=H,tx1=-1,ty1=-1;
+    for(let y=0;y<H;y++){const o=y*W*4+3;for(let xx=0;xx<W;xx++)if(d[o+xx*4]>0){if(xx<tx0)tx0=xx;if(xx>tx1)tx1=xx;if(y<ty0)ty0=y;if(y>ty1)ty1=y}}
+    if(tx1<0)return toast('the merged picture is empty','warn');
+    const bw=tx1-tx0+1,bh=ty1-ty0+1,c2=document.createElement('canvas');c2.width=bw;c2.height=bh;c2.getContext('2d').drawImage(c,tx0,ty0,bw,bh,0,0,bw,bh);
+    const blob=await toBlobAsync(c2);c.width=c.height=c2.width=c2.height=0;
+    const rr=await makeRec(blob,{trim:false});if(!rr)return;
+    const id=newId();store.set(id,rr.rec);
+    const top=ls[ls.length-1],topIdx=state.layers.indexOf(top);
+    pushUndo();lastKey=null;
+    const L2={id,name:top.name+(/ merged$/.test(top.name)?'':' merged'),x:x0+tx0,y:y0+ty0,w:bw,h:bh,scale:1,rot:0,px:.5,py:.5,op:1,vis:true,lock:false,ai:ls.some(l=>l.ai)};
+    const gone=new Set(ls.map(l=>l.id));
+    state.layers=state.layers.filter(l=>!gone.has(l.id));
+    state.layers.splice(Math.min(state.layers.length,topIdx-ls.length+1),0,L2);
+    for(const c of state.layers)if(c.par&&gone.has(c.par))c.par=id;
+    {const ps=new Set(ls.map(l=>l.par));if(ps.size===1){const q=[...ps][0];if(q&&!gone.has(q))L2.par=q}}
+    state.sel=id;msel.clear();lastStruct='';changed();
+    toast('merged '+ls.length+' layers into "'+L2.name+'" · ctrl+z undoes it'+(skipped?' · '+skipped+' hidden layer'+(skipped>1?'s':'')+' left alone':''),'good');
+  }finally{merging=false}
+}
+$('#b-merge').onclick=()=>mergeLayers(selIds());
+function moveLayer(id,d){
+  const i=state.layers.findIndex(l=>l.id===id),j=i+d;if(j<0||j>=state.layers.length)return;
+  edit(()=>{const [it]=state.layers.splice(i,1);state.layers.splice(j,0,it)});
+}
+function removeLayer(id){
+  const i=state.layers.findIndex(l=>l.id===id);if(i<0)return;
+  const nk=state.layers.filter(c=>c.par===id).length;if(nk)toast('its '+nk+' attached part'+(nk>1?'s are':' is')+' now detached');
+  edit(()=>{for(const c of state.layers)if(c.par===id)delete c.par;state.layers.splice(i,1);if(state.sel===id){const n=state.layers[Math.min(i,state.layers.length-1)];state.sel=n?n.id:null}});
+}
+LP.addEventListener('input',e=>{
+  if(e.target.dataset&&e.target.dataset.tint==='swatch'){const i=+e.target.dataset.i;if(i>=0&&i<copyCols.length){copyCols[i]=e.target.value;saveCopyCols()}return}
+  const k=e.target.dataset&&e.target.dataset.tint;if(!k||(k!=='color'&&k!=='amt'))return;const L=sel();if(!L)return;
+  edit(()=>{if(k==='color'){L.tint=e.target.value;if(L.ta==null)L.ta=1}else{L.ta=(+e.target.value)/100;if(!L.tint)L.tint=$('[data-tint="color"]',LP).value}},'tint'+L.id);
+});
+LP.addEventListener('change',e=>{
+  if(!(e.target.dataset&&e.target.dataset.tint==='mode'))return;const L=sel();if(!L)return;
+  edit(()=>{L.tm=e.target.value;if(!L.tint)L.tint=$('[data-tint="color"]',LP).value},'tint'+L.id);
+});
+LP.addEventListener('click',e=>{
+  const b=e.target.closest('[data-tint]');if(!b||b.tagName!=='BUTTON')return;const L=sel();if(!L)return;const k=b.dataset.tint;
+  if(k==='preset')edit(()=>{L.tint=b.dataset.c;if(L.ta==null)L.ta=1});
+  else if(k==='clear')edit(()=>{delete L.tint;delete L.tm;delete L.ta});
+  else if(k==='variants')makeVariants(L.id);
+  else if(k==='addcol'){if(copyCols.length>=8)return toast('8 colours is the most','warn');copyCols.push(sel()&&sel().tint||'#9B59B6');saveCopyCols();lastStruct='';renderLayers()}
+  else if(k==='delcol'){if(copyCols.length>1){copyCols.pop();saveCopyCols();lastStruct='';renderLayers()}}
+});
+LP.addEventListener('dblclick',e=>{const b=e.target.closest('[data-tint="swatch"]');if(!b)return;const L=sel();if(!L)return;edit(()=>{L.tint=copyCols[+b.dataset.i];if(L.ta==null)L.ta=1})});
+LP.addEventListener('contextmenu',e=>{const b=e.target.closest('[data-tint="swatch"]');if(!b)return;e.preventDefault();const L=sel();if(!L)return;edit(()=>{L.tint=copyCols[+b.dataset.i];if(L.ta==null)L.ta=1})});
+async function makeVariants(id,only){
+  const L=state.layers.find(l=>l.id===id);if(!L)return;const r0=store.get(id);if(r0.pending)await r0.pending;
+  const step=Math.round(L.w*L.scale*1.2)||80,copies=[],kidsOf=state.layers.filter(c=>c.par===id);
+  const TL=only?TINTS.filter(t=>only.includes(t[0])):copyCols.map((c,i)=>[TINTS.find(t=>t[1].toLowerCase()===c.toLowerCase())?.[0]||c.replace('#',''),c]);
+  for(let i=0;i<TL.length;i++){
+    const [nm,col]=TL[i],nid=await cloneRec(id);
+    // an untinted parent whose coloured part is tinted (a white rocket with a tinted body): only that part changes colour
+    const partsOnly=!L.tint&&kidsOf.some(k=>k.tint);
+    copies.push(partsOnly?{...L,id:nid,name:L.name+' '+nm,x:L.x+step*(i+1)}:{...L,id:nid,name:L.name+' '+nm,x:L.x+step*(i+1),tint:col,tm:L.tm||'multiply',ta:L.ta==null?1:L.ta});
+    for(const k of kidsOf){const kid=await cloneRec(k.id);copies.push({...k,id:kid,name:k.name+' '+nm,x:k.x+step*(i+1),par:nid,...(k.tint?{tint:col}:{})})}
+  }
+  const heads=copies.filter(c=>!c.par);
+  edit(()=>{state.layers.splice(state.layers.indexOf(L)+1,0,...copies);state.sel=heads[0].id});
+  toast('made '+heads.length+' colour copies'+(kidsOf.length?' (each with its '+kidsOf.length+' attached part'+(kidsOf.length>1?'s':'')+')':'')+' · move them where you want','good');
+}
+async function cloneRec(id){
+  const r0=store.get(id);if(r0.pending)await r0.pending;const nid=newId();
+  const c=document.createElement('canvas');c.width=r0.pv.width;c.height=r0.pv.height;c.getContext('2d').drawImage(r0.pv,0,0);
+  store.set(nid,{...r0,pv:c,mask:r0.mask.slice(),pending:null,tc:null,ver:0});return nid;
+}
+async function dupLayer(id){
+  const L=state.layers.find(l=>l.id===id);if(!L)return;const nid=await cloneRec(id);
+  const kids=[];for(const k of state.layers.filter(c=>c.par===id)){const kid=await cloneRec(k.id);kids.push({src:k,copy:{...k,id:kid,name:k.name+' copy',par:nid}})}
+  edit(()=>{
+    const c={...L,id:nid,name:L.name+' copy'};state.layers.splice(state.layers.indexOf(L)+1,0,c);state.sel=nid;
+    for(const k of kids)state.layers.splice(state.layers.indexOf(k.src)+1,0,k.copy);
+  });
+  if(kids.length)toast('duplicated with its '+kids.length+' attached part'+(kids.length>1?'s':''),'good');
+}
+function setPivot(L,px,py){ // keep the picture where it is
+  const [sx,sy]=l2s(L,px*L.w,py*L.h);L.px=px;L.py=py;L.x=sx-px*L.w;L.y=sy-py*L.h;
+}
+
+/* ---------- pointer handling ---------- */
+const stage=$('#stage');
+const ptrs=new Map();let drag=null,spaceDown=false,pinch=null;
+const lp=e=>{const r=stage.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top}};
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function hitLayer(sx,sy){
+  for(let i=state.layers.length-1;i>=0;i--){
+    const L=state.layers[i];if(!L.vis||L.lock)continue;
+    const [lx,ly]=s2l(L,sx,sy);if(lx<0||ly<0||lx>=L.w||ly>=L.h)continue;
+    const r=store.get(L.id);if(!r)continue;
+    const mx=Math.floor(lx/L.w*r.mw),my=Math.floor(ly/L.h*r.mh);
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      const x=clamp(mx+dx,0,r.mw-1),y=clamp(my+dy,0,r.mh-1);if(r.mask[y*r.mw+x]>16)return L;
+    }
+  }
+  return null;
+}
+function inside(L,sx,sy){const [lx,ly]=s2l(L,sx,sy);return lx>=0&&ly>=0&&lx<=L.w&&ly<=L.h}
+function pickHandle(L,p,rad){
+  const h=handlesFor(L);
+  if(dist(p,h.pivot)<=rad)return 'pivot';
+  if(dist(p,h.rot)<=rad+2)return 'rotate';
+  for(const c of h.c)if(dist(p,c)<=rad)return 'scale';
+  return null;
+}
+function setCursor(){
+  const m={move:'default',hand:'grab',zoom:'zoom-in',brush:'crosshair',eraser:'crosshair',wand:'crosshair',cut:'crosshair',redraw:'crosshair',shape:'crosshair'};stage.style.cursor=spaceDown?'grab':m[state.tool]||'default';
+}
+stage.addEventListener('pointerdown',e=>{
+  if(e.target.closest('#zoombar,#hint,#side-open,#tbar,#wbar,#cbar,#rbar,#sbar'))return;
+  try{stage.setPointerCapture(e.pointerId)}catch(_){}
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,type:e.pointerType});
+  if(e.pointerType!=='mouse')firstTouchHint();
+  if(e.pointerType==='touch'){drag=null;pinch=null;return}
+  const p=lp(e);
+  if(e.button===1||(e.button===0&&(spaceDown||state.tool==='hand'))){drag={mode:'pan',sx:p.x,sy:p.y,vx:view.x,vy:view.y};stage.style.cursor='grabbing';e.preventDefault();return}
+  if(e.button!==0)return;
+  if(state.tool==='zoom'){zoomAt(e.altKey||e.shiftKey?1/1.5:1.5,p.x,p.y);return}
+  if(state.tool==='wand'){wandPick(p);e.preventDefault();return}
+  if(state.tool==='cut'){cutPick(p,e.shiftKey||cutAdd);e.preventDefault();return}
+  if(state.tool==='shape'){sdrag={pid:e.pointerId,a:toScene(p),b:toScene(p),shift:e.shiftKey};e.preventDefault();draw();return}
+  if(state.tool==='redraw'){rdDown(e,p);e.preventDefault();return}
+  if(state.tool==='brush'||state.tool==='eraser'){beginStroke(e,p);e.preventDefault();return}
+  const sp=toScene(p),rad=e.pointerType==='mouse'?10:20;
+  if(pickPar&&state.tool==='move'){const h=hitLayer(sp.x,sp.y);if(h)finishPick(h.id);else cancelPick();e.preventDefault();return}
+  if(gb&&state.tool==='move'){const gd=gbStart(p,sp,rad);if(gd){drag=gd;e.preventDefault();return}}
+  let L=sel();
+  if(L&&!L.lock&&L.vis){
+    const hit=pickHandle(L,p,rad);
+    if(hit){
+      const pv=toScreen(l2s(L,L.px*L.w,L.py*L.h));
+      drag={mode:hit,L,started:false,pv,d0:dist(p,pv)||1,s0:L.scale,a0:Math.atan2(p.y-pv.y,p.x-pv.x)-L.rot*D2R};
+      e.preventDefault();return;
+    }
+  }
+  const hit=hitLayer(sp.x,sp.y);
+  if(hit){if(state.sel!==hit.id){state.sel=hit.id;changed()}L=hit}
+  else if(!(L&&!L.lock&&L.vis&&inside(L,sp.x,sp.y))){if(state.sel){state.sel=null;changed()}return}
+  if(L.lock)return;
+  drag={mode:'move',L,started:false,s0:sp,x0:L.x,y0:L.y};
+  e.preventDefault();
+});
+stage.addEventListener('pointermove',e=>{
+  const p=lp(e),sp=toScene(p);
+  $('#st-r').textContent=`cursor ${Math.round(sp.x)}, ${Math.round(sp.y)} · brush ${brush.size}px · space-drag to pan`;
+  hover=((state.tool==='brush'||state.tool==='eraser')&&!e.target.closest('#tbar,#wbar,#cbar,#zoombar'))?p:null;if(!stroke)draw();
+  if(stroke&&e.pointerId===stroke.pid){moveStroke(e);return}
+  if(sdrag&&e.pointerId===sdrag.pid){sdrag.b=sp;sdrag.shift=e.shiftKey;draw();return}
+  if(rd&&rd.cur&&e.pointerId===rd.cur.pid){rdMove(p);return}
+  if(state.tool==='redraw'&&rd&&rd.mode==='brush'&&!e.target.closest('#rbar')){rd.hover=p;draw()}
+  const old=ptrs.get(e.pointerId);
+  if(old&&old.type==='touch'){
+    const prev={x:old.x,y:old.y};old.x=e.clientX;old.y=e.clientY;
+    const ts=[...ptrs.values()].filter(q=>q.type==='touch');
+    if(ts.length===1){view.x+=e.clientX-prev.x;view.y+=e.clientY-prev.y;state.autoFit=false;draw();statusBar()}
+    else if(ts.length>=2){
+      const a=ts[0],b=ts[1],mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2},dd=Math.hypot(a.x-b.x,a.y-b.y);
+      const r=stage.getBoundingClientRect();
+      if(pinch){view.x+=mid.x-pinch.mid.x;view.y+=mid.y-pinch.mid.y;zoomAt(dd/pinch.dd,mid.x-r.left,mid.y-r.top)}
+      pinch={mid,dd};state.autoFit=false;draw();
+    }
+    return;
+  }
+  if(old){old.x=e.clientX;old.y=e.clientY}
+  if(!drag){
+    if(e.pointerType==='mouse'&&state.tool==='move'&&!spaceDown){
+      const L=sel();let c='default';
+      if(gb){const g=gbHit(p,sp,10);if(g){stage.style.cursor=g==='rot'?'alias':g==='move'?'move':'nwse-resize';return}}
+      if(L&&!L.lock&&L.vis){const h=pickHandle(L,p,10);if(h==='pivot')c='crosshair';else if(h==='rotate')c='alias';else if(h==='scale')c='nwse-resize';else if(hitLayer(sp.x,sp.y)||inside(L,sp.x,sp.y))c='move'}
+      else if(hitLayer(sp.x,sp.y))c='pointer';
+      stage.style.cursor=c;
+    }
+    return;
+  }
+  if(drag.mode==='pan'){view.x=drag.vx+p.x-drag.sx;view.y=drag.vy+p.y-drag.sy;state.autoFit=false;draw();statusBar();return}
+  if(drag.mode==='gbox'){gbDrag(p,sp,e);return}
+  const L=drag.L;
+  if(!drag.started){
+    if(drag.mode==='move'&&Math.hypot(sp.x-drag.s0.x,sp.y-drag.s0.y)*view.z<3)return;
+    drag.started=true;pushUndo();lastKey=null;
+  }
+  if(drag.mode==='move'){
+    let dx=sp.x-drag.s0.x,dy=sp.y-drag.s0.y;
+    if(e.shiftKey){if(Math.abs(dx)>Math.abs(dy))dy=0;else dx=0}
+    L.x=Math.round(drag.x0+dx);L.y=Math.round(drag.y0+dy);
+  }else if(drag.mode==='scale'){
+    L.scale=clamp(drag.s0*dist(p,drag.pv)/drag.d0,0.01,50);
+  }else if(drag.mode==='rotate'){
+    let r=(Math.atan2(p.y-drag.pv.y,p.x-drag.pv.x)-drag.a0)/D2R;
+    if(e.shiftKey)r=Math.round(r/15)*15;
+    r=((r+180)%360+360)%360-180;L.rot=Math.round(r*10)/10;
+  }else if(drag.mode==='pivot'){
+    const [lx,ly]=s2l(L,sp.x,sp.y);
+    L.px=lx/L.w;L.py=ly/L.h;L.x=sp.x-L.px*L.w;L.y=sp.y-L.py*L.h;
+  }
+  changedFast();
+});
+function endPtr(e){
+  const old=ptrs.get(e.pointerId);ptrs.delete(e.pointerId);
+  if([...ptrs.values()].filter(q=>q.type==='touch').length<2)pinch=null;
+  if(old&&old.type==='touch')return;
+  if(stroke&&e.pointerId===stroke.pid)finishStroke();
+  if(sdrag&&e.pointerId===sdrag.pid){const d=sdrag;sdrag=null;shapeFromDrag(d);draw()}
+  if(drag){const was=drag;drag=null;setCursor();if(was.started||was.mode==='pan')changed()}
+}
+stage.addEventListener('pointerleave',()=>{hover=null;draw()});
+stage.addEventListener('pointerup',endPtr);stage.addEventListener('pointercancel',endPtr);
+
+
+/* ---------- layer plan: paste a json plan made with Claude, review it, queue every layer ---------- */
+var planN=0;
+const PLAN_EXAMPLE={format:'layerforge-plan',version:1,ref:'reference',layers:[
+  {name:'background',type:'background',prompt:'deep space with a purple nebula, no ships or text'},
+  {name:'enemy',type:'element',prompt:'a round alien enemy with a dark outline',box:{x:1500,y:500,w:420,h:420,rot:0},white:true,tints:['red','blue','green','yellow']},
+  {name:'enemy eyes',type:'element',prompt:'two big cartoon eyes only',box:{x:1560,y:580,w:300,h:120,rot:0},parent:'enemy'}]};
+function planParse(txt){
+  let o;try{o=JSON.parse(txt.trim().replace(/^```(?:json)?/i,'').replace(/```$/,''))}catch(e){throw new Error('that is not valid json ('+e.message+')')}
+  const arr=Array.isArray(o)?o:o&&o.layers;if(!Array.isArray(arr)||!arr.length)throw new Error('no "layers" list found');
+  const names=new Set(),out=[];
+  arr.forEach((q,i)=>{
+    if(!q||typeof q.prompt!=='string'||!q.prompt.trim())throw new Error('layer '+(i+1)+' has no prompt');
+    const name=String(q.name||('layer '+(i+1))).slice(0,40),type=q.type==='background'?'background':'element';
+    let box=null;
+    if(type==='element'&&q.box&&[q.box.x,q.box.y,q.box.w,q.box.h].every(v=>isFinite(+v))){
+      const w=Math.max(24,+q.box.w),h=Math.max(24,+q.box.h);
+      box={cx:Math.round(+q.box.x+w/2),cy:Math.round(+q.box.y+h/2),w:Math.round(w),h:Math.round(h),rot:Math.round((+q.box.rot||0)*10)/10};
+    }
+    const tints=type==='element'&&q.tints?(Array.isArray(q.tints)?q.tints.filter(t=>TINTS.some(x=>x[0]===t)):true):null;
+    out.push({name,type,prompt:q.prompt.trim(),box,white:!!q.white&&type==='element',tints:tints&&tints.length===0?null:tints,parent:q.parent?String(q.parent):null,on:true});
+    names.add(name);
+  });
+  out.forEach(q=>{if(q.parent&&!names.has(q.parent))q.parentMissing=true});
+  return {layers:out,ref:o&&o.ref};
+}
+function openPlan(){
+  openModal(`<h2><span class="d">$</span> paste a layer plan</h2>
+    <div class="dim">a plan made with Claude (json). check it, untick what you do not want, then queue. nothing is spent until you press queue.</div>
+    <textarea id="pl-t" spellcheck="false" placeholder='{"format":"layerforge-plan","layers":[ … ]}' style="width:100%;height:150px;background:var(--bg,#141413);color:var(--text);border:1px solid var(--line2);border-radius:6px;padding:8px;font:12px ui-monospace,Consolas,monospace"></textarea>
+    <div class="foot" style="justify-content:flex-start;gap:8px"><button class="sm" id="pl-chk">check plan</button><button class="sm" id="pl-ex" title="put an example plan in the box">example</button><span class="dim" id="pl-msg"></span></div>
+    <div id="pl-list" style="max-height:230px;overflow:auto;margin:6px 0"></div>
+    <label class="dim" id="pl-refrow" hidden>reference for every layer <select id="pl-ref"><option value="ref">attached reference (cropped to each box)</option><option value="scene">the scene so far</option><option value="both">scene + reference</option><option value="none">nothing</option></select></label>
+    <div class="foot"><button class="cancel" id="pl-x">cancel</button><button class="btn-clay" id="pl-go" disabled>queue</button></div>`,m=>{
+    let plan=null;const msg=$('#pl-msg',m),go=$('#pl-go',m);
+    const count=()=>{const n=plan?plan.layers.filter(q=>q.on).length:0;go.disabled=!n;go.textContent=n?'queue '+n+' layer'+(n>1?'s':''):'queue'};
+    $('#pl-ex',m).onclick=()=>{$('#pl-t',m).value=JSON.stringify(PLAN_EXAMPLE,null,1)};
+    $('#pl-x',m).onclick=closeModal;
+    $('#pl-chk',m).onclick=()=>{
+      try{plan=planParse($('#pl-t',m).value)}catch(e){plan=null;msg.textContent=e.message;$('#pl-list',m).innerHTML='';count();return}
+      msg.textContent='';$('#pl-refrow',m).hidden=false;
+      const rv=plan.ref==='reference'||plan.ref==='ref'?'ref':(['scene','both','none'].includes(plan.ref)?plan.ref:(refBlob?'ref':'scene'));$('#pl-ref',m).value=rv;
+      $('#pl-list',m).innerHTML=plan.layers.map((q,i)=>`<label class="ckl" style="display:flex;gap:8px;align-items:flex-start;padding:4px 0;border-bottom:1px solid var(--line2)"><input type="checkbox" data-i="${i}" checked><span><b>${esc(q.name)}</b> <span class="dim">· ${q.type}${q.box?' · box '+q.box.w+'×'+q.box.h+(q.box.rot?' @'+q.box.rot+'°':''):''}${q.white?' · white':''}${q.tints?' · tint copies':''}${q.parent?' · part of '+esc(q.parent)+(q.parentMissing?' (not in this plan!)':''):''}</span><br><span class="dim">${esc(q.prompt.slice(0,140))}</span></span></label>`).join('');
+      $$('#pl-list input',m).forEach(c=>c.onchange=()=>{plan.layers[+c.dataset.i].on=c.checked;count()});count();
+    };
+    go.onclick=()=>{
+      if(!plan)return;const rm=$('#pl-ref',m).value;
+      if(!(cfg.provider==='openai'?cfg.openaiKey:cfg.geminiKey).trim()){toast('add your '+cfg.provider+' api key first','warn');return}
+      if((rm==='ref'||rm==='both')&&!refBlob){toast('attach the reference picture first (the + next to ref in the prompt bar)','warn');return}
+      const id=++planN,items=plan.layers.filter(q=>q.on).sort((a,b)=>(a.type==='background'?0:1)-(b.type==='background'?0:1)||(a.parent?1:0)-(b.parent?1:0));
+      for(const q of items)jobs.push({id:++jobN,text:q.prompt,kind:q.type,white:q.white,box:q.box,layerId:null,provider:cfg.provider,ref:rm,afterId:null,pos:q.type==='background'?'bottom':'top',status:'queued',name:q.name,ac:null,plan:{id,key:q.name,parent:q.parent,tints:q.tints}});
+      closeModal();renderJobs();runQueue();toast('queued '+items.length+' layer'+(items.length>1?'s':'')+' from the plan','good');
+    };
+  });
+}
+async function finishPlans(){
+  const ids=[...new Set(jobs.filter(j=>j.plan&&!j.plan.fin).map(j=>j.plan.id))];
+  for(const pid of ids){
+    const pj=jobs.filter(j=>j.plan&&j.plan.id===pid);
+    if(pj.some(j=>j.status==='queued'||j.status==='running'))continue;
+    pj.forEach(j=>j.plan.fin=1);
+    for(const j of pj){
+      if(j.status!=='done'||!j.plan.tints||!state.layers.some(l=>l.id===j.out))continue;
+      await makeVariants(j.out,Array.isArray(j.plan.tints)?j.plan.tints:undefined);
+    }
+  }
+}
+$('#gplan-b').onclick=openPlan;
+
+/* ---------- generation box (move / resize / turn it, then the ai paints into it) ---------- */
+let gb=null; // {cx,cy,w,h,rot} in scene pixels
+const gbBtn=()=>{const b=$('#gbox-b');if(b){b.style.borderColor=gb?'var(--clay,#D97757)':'';b.style.color=gb?'var(--clay,#D97757)':'';b.textContent=gb?'▭ box on':'▭ box'}};
+function gbToggle(){
+  if(gb){gb=null;gbBtn();draw();return}
+  const r=stage.getBoundingClientRect(),c=toScene({x:r.width/2,y:r.height/2}),s=Math.round(Math.min(state.W,state.H)/3);
+  gb={cx:clamp(Math.round(c.x),0,state.W),cy:clamp(Math.round(c.y),0,state.H),w:s,h:s,rot:0};gbBtn();draw();
+  toast('drag the box to move it, the corners to resize, the round handle to turn it. then type what to make and generate');
+}
+function gbPts(){ // screen points: 4 corners (- -, + -, + +, - +), rotate handle, top middle
+  const a=gb.rot*D2R,co=Math.cos(a),si=Math.sin(a),P=(x,y)=>toScreen([gb.cx+x*co-y*si,gb.cy+x*si+y*co]),w=gb.w/2,h=gb.h/2;
+  const tm=P(0,-h),c=P(0,0);let dx=tm.x-c.x,dy=tm.y-c.y;const n=Math.hypot(dx,dy)||1;dx/=n;dy/=n;
+  return {c:[P(-w,-h),P(w,-h),P(w,h),P(-w,h)],tm,rot:{x:tm.x+dx*34,y:tm.y+dy*34}};
+}
+function gbHit(p,sp,rad){
+  if(!gb)return null;const h=gbPts();
+  if(dist(p,h.rot)<=rad+2)return 'rot';
+  for(let i=0;i<4;i++)if(dist(p,h.c[i])<=rad)return 'c'+i;
+  const a=-gb.rot*D2R,dx=sp.x-gb.cx,dy=sp.y-gb.cy,lx=dx*Math.cos(a)-dy*Math.sin(a),ly=dx*Math.sin(a)+dy*Math.cos(a);
+  return (Math.abs(lx)<=gb.w/2&&Math.abs(ly)<=gb.h/2)?'move':null;
+}
+function gbStart(p,sp,rad){
+  const g=gbHit(p,sp,rad);if(!g)return null;
+  const d={mode:'gbox',what:g,started:true,g0:{...gb},s0:sp};
+  if(g[0]==='c'){
+    const i=+g[1],sx=(i===1||i===2)?1:-1,sy=(i>=2)?1:-1,a=gb.rot*D2R,co=Math.cos(a),si=Math.sin(a);
+    d.sx=sx;d.sy=sy;d.ax=gb.cx-(sx*gb.w/2)*co+(sy*gb.h/2)*si;d.ay=gb.cy-(sx*gb.w/2)*si-(sy*gb.h/2)*co;
+  }else if(g==='rot'){const c=toScreen([gb.cx,gb.cy]);d.cs=c;d.a0=Math.atan2(p.y-c.y,p.x-c.x)-gb.rot*D2R}
+  return d;
+}
+function gbDrag(p,sp,e){
+  const d=drag,g=d.g0;
+  if(d.what==='move'){let dx=sp.x-d.s0.x,dy=sp.y-d.s0.y;if(e.shiftKey){if(Math.abs(dx)>Math.abs(dy))dy=0;else dx=0}gb.cx=Math.round(g.cx+dx);gb.cy=Math.round(g.cy+dy)}
+  else if(d.what==='rot'){let r=(Math.atan2(p.y-d.cs.y,p.x-d.cs.x)-d.a0)/D2R;if(e.shiftKey)r=Math.round(r/15)*15;gb.rot=Math.round((((r+180)%360+360)%360-180)*10)/10}
+  else{
+    const a=g.rot*D2R,ux=Math.cos(a),uy=Math.sin(a),vx=-uy,vy=ux,dx=sp.x-d.ax,dy=sp.y-d.ay;
+    let w=Math.max(24,(dx*ux+dy*uy)*d.sx),h=Math.max(24,(dx*vx+dy*vy)*d.sy);
+    if(e.shiftKey){const k=g.w/g.h;if(w/h>k)h=w/k;else w=h*k}
+    w=Math.round(w);h=Math.round(h);
+    gb.w=w;gb.h=h;gb.cx=Math.round(d.ax+d.sx*w/2*ux+d.sy*h/2*vx);gb.cy=Math.round(d.ay+d.sx*w/2*uy+d.sy*h/2*vy);
+  }
+  draw();
+}
+function gbPaint(){
+  const h=gbPts();ctx.save();
+  ctx.beginPath();h.c.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.closePath();
+  ctx.fillStyle='rgba(217,119,87,.08)';ctx.fill();ctx.strokeStyle='#D97757';ctx.lineWidth=1.5;ctx.setLineDash([7,5]);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#141413';h.c.forEach(q=>{ctx.beginPath();ctx.rect(q.x-5,q.y-5,10,10);ctx.fill();ctx.stroke()});
+  ctx.beginPath();ctx.moveTo(h.tm.x,h.tm.y);ctx.lineTo(h.rot.x,h.rot.y);ctx.stroke();
+  ctx.beginPath();ctx.arc(h.rot.x,h.rot.y,6,0,7);ctx.fill();ctx.stroke();
+  const tl=h.c.reduce((a,q)=>q.y<a.y?q:a,h.c[0]),label='▭ '+gb.w+'×'+gb.h+(gb.rot?' · '+gb.rot+'°':'')+' · the ai paints here';
+  ctx.font='12px ui-monospace,Consolas,monospace';const tw=ctx.measureText(label).width+16;
+  ctx.fillStyle='#3A2A22';ctx.fillRect(tl.x,tl.y-26,tw,20);ctx.fillStyle='#F0B49A';ctx.textBaseline='middle';ctx.fillText(label,tl.x+8,tl.y-16);
+  ctx.restore();
+}
+/* ---------- ai image generation (keys stay in this browser) ---------- */
+const DEF={provider:'openai',openaiKey:'',geminiKey:'',openaiModel:'gpt-image-2',geminiModel:'gemini-nano-banana-2.1',size:'medium',quality:'medium',openaiBase:'https://api.openai.com',geminiBase:'https://generativelanguage.googleapis.com'};
+const cfg={...DEF};
+try{Object.assign(cfg,JSON.parse(localStorage.getItem('lf-settings')||'{}'))}catch(_){}
+const saveCfg=()=>{try{localStorage.setItem('lf-settings',JSON.stringify(cfg))}catch(_){toast('could not store settings in this browser','warn')}};
+const jobs=[];let jobN=0,runner=false;
+const layerNameFrom=t=>t.split(/[,.;\n]/)[0].replace(/^(a|an|the)\s+/i,'').trim().slice(0,28)||'ai layer';
+function jobRow(j){
+  const d=document.createElement('div');d.className='row gen';
+  d.innerHTML=`<div class="r1"><span class="gstar ${j.status==='running'?'spin':''}">✻</span><div class="meta"><span class="nm">${esc(j.name)}</span><span class="sub">${j.status==='running'?'painting…':'queued'} · ${j.kind} · ${j.provider}</span></div><button class="ib" data-jobx="${j.id}" aria-label="cancel" title="cancel">${ic('x')}</button></div>`;
+  return d;
+}
+function aiShut(v){$('#ai').classList.toggle('shut',v);const t=$('#ai-t .tg');if(t)t.textContent=v?'▸ log':'▾ log';try{localStorage.setItem('lf-ailog',v?'0':'1')}catch(_){}}
+$('#ai-t').addEventListener('click',()=>aiShut(!$('#ai').classList.contains('shut')));
+function renderJobs(){
+  const live=jobs.filter(j=>j.status==='queued'||j.status==='running'),running=live.some(j=>j.status==='running');
+  $('#ai-t').innerHTML=`${running?'<span class="st spin">✻</span> ':''}<span class="d">$</span> ai${live.length?' · '+live.length+' left':''}<span class="tg">${$('#ai').classList.contains('shut')?'▸ log':'▾ log'}</span>`;
+  const glyph={done:'✓',running:'▸',queued:'·',failed:'✗',cancelled:'–'};
+  $('#ai-b').textContent=jobs.length?jobs.slice(-5).map(j=>glyph[j.status]+' '+j.name).join('\n'):'z  z  nothing queued';
+  $('#gen-stop').hidden=!live.length;$('#make').placeholder=live.length?'queue another layer…':'describe the next layer…';
+  lastStruct='';renderLayers();draw();
+}
+function cancelJob(id){
+  const j=jobs.find(x=>x.id===id);if(!j)return;
+  if(j.status==='running'){j.status='cancelled';try{j.ac&&j.ac.abort()}catch(_){}}
+  else if(j.status==='queued')j.status='cancelled';
+  renderJobs();
+}
+$('#gen-stop').onclick=()=>{jobs.filter(j=>j.status==='queued'||j.status==='running').forEach(j=>cancelJob(j.id))};
+let refBlob=null;
+async function shrinkBlob(b,max){
+  const bm=await createImageBitmap(b),k=Math.min(1,max/Math.max(bm.width,bm.height));
+  if(k===1){bm.close&&bm.close();return b}
+  const c=document.createElement('canvas');c.width=Math.round(bm.width*k);c.height=Math.round(bm.height*k);const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(bm,0,0,c.width,c.height);bm.close&&bm.close();
+  const o=await toBlobAsync(c);c.width=c.height=0;return o;
+}
+async function cropRef(b){ // the part of the attached reference that sits under the box (a little wider), at full detail
+  const bm=await createImageBitmap(refBlob),a=b.rot*D2R,co=Math.abs(Math.cos(a)),si=Math.abs(Math.sin(a));
+  const bw=b.w*co+b.h*si,bh=b.w*si+b.h*co,k=bm.width/state.W,pad=0.12;
+  let x0=(b.cx-bw/2*(1+pad))*k,y0=(b.cy-bh/2*(1+pad))*k,x1=(b.cx+bw/2*(1+pad))*k,y1=(b.cy+bh/2*(1+pad))*k;
+  x0=Math.max(0,Math.floor(x0));y0=Math.max(0,Math.floor(y0));x1=Math.min(bm.width,Math.ceil(x1));y1=Math.min(bm.height,Math.ceil(y1));
+  const w=x1-x0,h=y1-y0;if(w<8||h<8){bm.close&&bm.close();return null}
+  const m=Math.min(1,1280/Math.max(w,h)),c=document.createElement('canvas');c.width=Math.round(w*m);c.height=Math.round(h*m);
+  c.getContext('2d').drawImage(bm,x0,y0,w,h,0,0,c.width,c.height);bm.close&&bm.close();
+  const out=await toBlobAsync(c);c.width=c.height=0;return out;
+}
+async function getRefs(j){
+  const m=j.ref||'scene',out=[];
+  if(m==='scene'||m==='both'){const b=await flattenScene(1024);if(b)out.push(b)}
+  if(m==='layer'||m==='layerref'){const b=await flattenScene(1024,j.layerId);if(b)out.push(b)}
+  if(m==='ref'&&j.box&&refBlob){const b=await cropRef(j.box);if(b){out.push(b);j.refCrop=true;return out}}
+  if((m==='ref'||m==='both'||m==='layerref')&&refBlob)out.push(await shrinkBlob(refBlob,1280));
+  return out;
+}
+function showRef(){
+  const im=$('#gref-img');if(im.dataset.u)URL.revokeObjectURL(im.dataset.u);
+  if(refBlob){const u=URL.createObjectURL(refBlob);im.dataset.u=u;im.src=u;im.hidden=false}else{im.hidden=true;im.removeAttribute('src');delete im.dataset.u}
+}
+async function putRef(){try{const db=await idb(),tx=db.transaction('kv','readwrite');refBlob?tx.objectStore('kv').put(refBlob,'ref'):tx.objectStore('kv').delete('ref');await txDone(tx);db.close()}catch(_){}}
+function setRef(b,quiet){refBlob=b;showRef();if(!quiet){$('#gref').value=b?'ref':'scene';putRef()}}
+$('#gref-set').onclick=()=>$('#reffile').click();
+$('#reffile').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(!/^image\//.test(f.type))return toast('that is not a picture','warn');setRef(f);toast('reference attached · the ai will now look at it','good')});
+$('#gref-img').onclick=()=>{if(confirm('remove the reference picture?'))setRef(null)};
+$('#gref-img').title='click to remove the reference';
+function enqueue(){
+  const inp=$('#make'),text=inp.value.trim();
+  if(!text)return toast('describe the layer first','warn');
+  if(!(cfg.provider==='openai'?cfg.openaiKey:cfg.geminiKey).trim()){toast('add your '+cfg.provider+' api key first','warn');openSettings();return}
+  let rm=$('#gref').value;if((rm==='ref'||rm==='layerref')&&!refBlob){toast('attach a reference picture first (the + next to ref)','warn');return}if(rm==='both'&&!refBlob)rm='scene';
+  const lid=state.sel;if((rm==='layer'||rm==='layerref')&&!(lid&&store.get(lid))){toast('select a layer first, the ai will look at just that one','warn');return}
+  const kindNow=$('#gkind').value;
+  const white=$('#gwhite').checked&&kindNow==='element';
+  const box=(gb&&kindNow==='element')?{...gb}:null;
+  jobs.push({id:++jobN,text,kind:kindNow,white,box,layerId:lid,provider:cfg.provider,ref:rm,afterId:state.sel,pos:$('#gpos').value,status:'queued',name:layerNameFrom(text),ac:null});
+  inp.value='';if(box){gb=null;gbBtn();draw()}if(kindNow==='background'){$('#gkind').value='element';toast('queued the background · type switched back to element for the next layer')}renderJobs();runQueue();
+}
+$('#gen-go').onclick=enqueue;$('#gbox-b').onclick=gbToggle;
+$('#make').addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Enter'){e.preventDefault();enqueue()}});
+$('#gprov').addEventListener('change',e=>{cfg.provider=e.target.value;saveCfg()});
+async function runQueue(){
+  if(runner)return;runner=true;
+  try{
+    for(let j;(j=jobs.find(x=>x.status==='queued'));){
+      j.status='running';renderJobs();setBusy(1);
+      try{await runJob(j);if(j.status==='running')j.status='done'}
+      catch(err){
+        if(j.status==='cancelled'||(err&&err.name==='AbortError')){j.status='cancelled'}
+        else{j.status='failed';console.error(err);toast(j.name+': '+(err&&err.message||err),'err')}
+      }finally{setBusy(-1);renderJobs()}
+    }
+  }finally{runner=false;draw();setTimeout(integrityCheck,300);finishPlans()}
+}
+async function flattenScene(maxSide,only){
+  const vis=only?state.layers.filter(l=>l.id===only&&store.get(l.id)):state.layers.filter(l=>l.vis&&store.get(l.id));if(!vis.length)return null;
+  const k=Math.min(1,maxSide/Math.max(state.W,state.H)),c=document.createElement('canvas');c.width=Math.round(state.W*k);c.height=Math.round(state.H*k);
+  const x=c.getContext('2d');x.fillStyle='#808080';x.fillRect(0,0,c.width,c.height);x.scale(k,k);x.imageSmoothingQuality='high';
+  for(const L of vis){x.save();x.globalAlpha=L.op;applyM(x,L);x.drawImage(tintedSurface(L,store.get(L.id),store.get(L.id).pv),0,0,L.w,L.h);x.restore()}
+  const b=await toBlobAsync(c);c.width=c.height=0;return b;
+}
+const blobB64=b=>new Promise(res=>{const f=new FileReader();f.onload=()=>res(String(f.result).split(',')[1]);f.readAsDataURL(b)});
+function b64Blob(b64,mime){const bin=atob(b64),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new Blob([u],{type:mime||'image/png'})}
+async function apiErr(r){let m='';try{const t=await r.text();try{const j=JSON.parse(t);m=(j.error&&(j.error.message||j.error))||j.message||t}catch(_){m=t}}catch(_){}return r.status+': '+String(m).slice(0,220)}
+async function fetchApi(url,opt){try{return await fetch(url,opt)}catch(err){if(err&&err.name==='AbortError')throw err;throw new Error('could not reach '+new URL(url).host+' (no internet, a wrong address in settings, or the browser blocked the request)')}}
+function findImage(o){
+  let best=null;
+  (function walk(v,k){
+    if(Array.isArray(v)){v.forEach(x=>walk(x,k));return}
+    if(v&&typeof v==='object'){const mt=v.mime_type||v.mimeType;
+      for(const [kk,vv] of Object.entries(v)){
+        if(typeof vv==='string'&&vv.length>2000){if(kk==='b64_json'||(kk==='data'&&((mt&&/^image\//.test(mt))||k==='output_image'||k==='image')))best={data:vv,mime:mt}}
+        else walk(vv,kk);
+      }}
+  })(o,'');
+  return best;
+}
+function composePrompt(j,n,green){
+  return composePrompt0(j,n,green)+(j.box?` Compose it to fill the whole frame, which is ${j.box.w>j.box.h*1.15?'wide':j.box.h>j.box.w*1.15?'tall':'square'}: the element upright, as large as the frame allows with only a small margin, nothing cropped.`:'');
+}
+function composePrompt0(j,n,green){
+  const m=n?(j.ref||'scene'):'none',recreate=m==='ref'||m==='both'||m==='layerref';
+  const refTxt={ref:'The attached picture is the target reference for a 2D game scene.',both:'The first attached picture is the scene built so far; the second is the target reference for the finished scene.',layerref:'The first attached picture shows one existing layer of the scene on a grey background, in its place in the frame; the second is the target reference for the finished scene.',layer:'',scene:'',none:''}[m];
+  if(j.kind==='background'){
+    if(recreate)return `${refTxt} Recreate ONLY the BACKGROUND of the reference as a separate layer (${j.text}): the same scene with every character, creature, vehicle, button, text, score, UI element and effect removed, with the same composition so it lines up with the reference. Fill the whole frame edge to edge. Match the reference's art style exactly. No text, no frame, no border.`;
+    return `Paint the BACKGROUND layer of a 2D game scene: ${j.text}. Fill the whole frame edge to edge. No text, no frame, no border.`+(n?(m==='layer'?' Match the art style, palette and lighting of the attached image, which shows one existing layer of the scene.':' Match the art style, palette and lighting of the attached image of the scene so far.'):'');
+  }
+  const wTxt=j.white?'Make it a TINTABLE sprite: paint every colour area pure white or very light grey with soft light-grey shading for form, and keep the dark outline and dark detail lines exactly as normal. Use no colour at all (only white, greys and the dark outline), so it can be recoloured later in code. Do not paint white onto the background. ':'';
+  const bgTxt=wTxt+(green?'Use a perfectly flat, solid, pure green (#00FF00) background with no shadows, gradient or texture. ':'The background must be transparent. ');
+  if(j.box&&m==='ref')return `The attached picture is a close-up crop of the target reference for a 2D game scene, showing the part to make. Task: output a NEW picture that contains ONLY this part, as its own separate layer: ${j.text}. Redraw just that part, upright, in exactly the same art style, palette and line work as the crop. Do NOT draw the background, neighbouring objects, text or anything else that is in the crop: everything except the requested part must be empty. ${bgTxt}No text, no frame, no border.`;
+  if(recreate)return `${refTxt} Task: output a NEW picture that contains ONLY this part of the reference, as its own separate layer: ${j.text}. Redraw just that part, in the same position and at the same size as in the reference so the layers line up when stacked, in exactly the same art style, palette and line work. Do NOT draw the background, sky, planets, stars, text or any other character or object: everything except the requested part must be empty. ${bgTxt}No text, no frame, no border.`;
+  return `Paint ONE separate element for a layered 2D game scene: ${j.text}. `+(n?(m==='layer'?'The attached image shows just one existing layer of the scene, on a grey background, in its place in the frame: match its art style, palette, lighting and perspective, and place the new element in the frame where the description says, but do not copy or repaint that layer. ':'The attached image shows the scene so far: match its art style, palette, lighting and perspective, and place the new element in the frame where the description says, but do not repaint or copy the existing scene. '):'Place it in the frame where the description says. ')+'Only this element may appear; everything else in the picture is empty background. '+bgTxt+'No text, no frame, no border.';
+}
+function openaiSize(model,a=state.W/state.H,lng){
+  const long=lng||{small:1024,medium:1536,large:2560}[cfg.size]||1536;
+  if(/gpt-image-2|sunburst|flare/.test(model)){let w,h;if(a>=1){w=long;h=long/a}else{h=long;w=long*a}return Math.max(16,Math.round(w/16)*16)+'x'+Math.max(16,Math.round(h/16)*16)}
+  return a>1.2?'1536x1024':a<0.83?'1024x1536':'1024x1024';
+}
+function geminiAspect(a=state.W/state.H){
+  const opts={'1:1':1,'3:2':1.5,'2:3':2/3,'3:4':.75,'4:3':4/3,'4:5':.8,'5:4':1.25,'9:16':9/16,'16:9':16/9,'21:9':21/9};
+  return Object.keys(opts).reduce((b,k)=>Math.abs(opts[k]-a)<Math.abs(opts[b]-a)?k:b,'1:1');
+}
+async function genOpenAI(j,ref){
+  const base=cfg.openaiBase.replace(/\/+$/,''),model=(cfg.openaiModel||DEF.openaiModel).trim(),size=openaiSize(model,j.box?clamp(j.box.w/j.box.h,1/3,3):undefined),key=cfg.openaiKey.trim();
+  const call=async transparent=>{
+    const prompt=composePrompt(j,ref.length,j.kind==='element'&&!transparent);
+    if(ref.length){
+      const fd=new FormData();fd.append('model',model);fd.append('prompt',prompt);ref.forEach((b,i)=>fd.append('image[]',b,'ref'+i+'.png'));fd.append('size',size);fd.append('quality',cfg.quality);fd.append('output_format','png');fd.append('n','1');
+      if(transparent)fd.append('background','transparent');
+      return fetchApi(base+'/v1/images/edits',{method:'POST',headers:{Authorization:'Bearer '+key},body:fd,signal:j.ac.signal});
+    }
+    const body={model,prompt,size,quality:cfg.quality,output_format:'png',n:1};if(transparent)body.background='transparent';
+    return fetchApi(base+'/v1/images/generations',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(body),signal:j.ac.signal});
+  };
+  let needsWand=false,r=await call(j.kind==='element');
+  if(!r.ok&&j.kind==='element'&&r.status===400){const m=await apiErr(r);if(/background|transparen/i.test(m)){needsWand=true;r=await call(false)}else throw new Error(m)}
+  if(!r.ok)throw new Error(await apiErr(r));
+  const img=findImage(await r.json());if(!img)throw new Error('openai answered without an image');
+  return {blob:b64Blob(img.data,img.mime||'image/png'),needsWand};
+}
+async function genGemini(j,ref){
+  const base=cfg.geminiBase.replace(/\/+$/,''),model=(cfg.geminiModel||DEF.geminiModel).trim(),key=cfg.geminiKey.trim();
+  const prompt=composePrompt(j,ref.length,j.kind==='element'),b64s=await Promise.all(ref.map(blobB64)),ar=geminiAspect(j.box?j.box.w/j.box.h:undefined),size={small:'1K',medium:'2K',large:'4K'}[cfg.size]||'2K';
+  const hdr={'x-goog-api-key':key,'Content-Type':'application/json'};
+  const input=[{type:'text',text:prompt}];b64s.forEach(b=>input.push({type:'image',mime_type:'image/png',data:b}));
+  let r=await fetchApi(base+'/v1beta/interactions',{method:'POST',headers:hdr,signal:j.ac.signal,body:JSON.stringify({model,input,response_format:{type:'image',mime_type:'image/png',aspect_ratio:ar,image_size:size}})});
+  let js;
+  if(r.ok)js=await r.json();
+  else{
+    const e1=await apiErr(r);
+    if(![400,404,405].includes(r.status))throw new Error(e1);
+    const parts=[{text:prompt}];b64s.forEach(b=>parts.push({inline_data:{mime_type:'image/png',data:b}}));
+    r=await fetchApi(base+'/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:hdr,signal:j.ac.signal,body:JSON.stringify({contents:[{parts}],generationConfig:{responseModalities:['IMAGE'],imageConfig:{aspectRatio:ar,imageSize:size}}})});
+    if(!r.ok)throw new Error(e1+'  |  fallback '+await apiErr(r));
+    js=await r.json();
+  }
+  const img=findImage(js);if(!img)throw new Error('gemini answered without an image (try another model in settings)');
+  return {blob:b64Blob(img.data,img.mime||'image/png'),needsWand:j.kind==='element'};
+}
+async function runJob(j){
+  if(j.kind==='fill')return runFill(j);
+  if(j.kind==='redraw')return runRedraw(j);
+  if(j.kind==='upscale')return runUpscale(j);
+  j.ac=new AbortController();
+  const ref=await getRefs(j);
+  const res=j.provider==='openai'?await genOpenAI(j,ref):await genGemini(j,ref);
+  if(j.status==='cancelled')return;
+  if(j.kind==='element'&&!res.needsWand&&await cornersFlat(res.blob))res.needsWand=true; // the model ignored 'transparent' and painted a flat backdrop
+  await new Promise(r=>setTimeout(r,30));
+  const r=await makeRec(res.blob,{trim:true});if(!r)throw new Error('the picture came back fully transparent');
+  const id=newId();store.set(id,r.rec);
+  let L;
+  if(j.box){ // lands exactly in the box: same centre, same turn, picture fitted inside it
+    const b=j.box,sc=Math.min(b.w/r.W0,b.h/r.H0),a=b.rot*D2R,co=Math.cos(a),si=Math.sin(a);
+    const dx=(r.ox+r.rec.w/2-r.W0/2)*sc,dy=(r.oy+r.rec.h/2-r.H0/2)*sc,cx=b.cx+dx*co-dy*si,cy=b.cy+dx*si+dy*co;
+    L={id,name:j.name,x:Math.round(cx-r.rec.w/2),y:Math.round(cy-r.rec.h/2),w:r.rec.w,h:r.rec.h,scale:sc,rot:b.rot,px:.5,py:.5,op:1,vis:true,lock:false,ai:true};
+  }else{
+    const sc=Math.max(state.W/r.W0,state.H/r.H0),ox0=(state.W-r.W0*sc)/2,oy0=(state.H-r.H0*sc)/2;
+    L={id,name:j.name,x:ox0+r.ox*sc,y:oy0+r.oy*sc,w:r.rec.w,h:r.rec.h,scale:sc,rot:0,px:0,py:0,op:1,vis:true,lock:false,ai:true};
+    setPivot(L,.5,.5);L.x=Math.round(L.x);L.y=Math.round(L.y);
+  }
+  j.out=id;
+  if(j.plan&&j.plan.parent){const pj=jobs.find(x=>x.plan&&x.plan.id===j.plan.id&&x.plan.key===j.plan.parent),pl=pj&&state.layers.find(l=>l.id===pj.out);if(pl&&!pl.par)L.par=pl.id}
+  pushUndo();lastKey=null;
+  let pos=j.pos||'auto';if(pos==='auto')pos=j.kind==='background'?'bottom':'above';
+  let i=state.layers.findIndex(l=>l.id===j.afterId);if(i<0&&(pos==='above'||pos==='below'))pos='top';
+  const at=pos==='top'?state.layers.length:pos==='bottom'?0:pos==='below'?i:i+1;state.layers.splice(at,0,L);state.sel=id;
+  j.status='done';changed();renderJobs();
+  if(res.needsWand){
+    let ok=false;try{ok=await autoWandLayer(id)}catch(e){console.error(e)}
+    if(ok)toast('painted '+j.name+' · flat background removed (ctrl+z brings it back)','good');
+    else{$('#wtol').value=30;$('#wtv').textContent='30';setTool('wand');toast('painted · press apply to remove the flat background','good')}
+  }else{
+    const mk=r.rec.mask;let solid=0;for(let i=0;i<mk.length;i++)if(mk[i]>200)solid++;
+    if(j.kind==='element'&&r.rec.w>=r.W0*.98&&r.rec.h>=r.H0*.98&&solid>mk.length*.9)toast(j.name+': the ai painted a whole picture, not a separate element. try naming just that one thing, and check the type says element','warn');
+    else toast('painted '+j.name,'good');
+  }
+}
+function openSettings(){
+  const om=['gpt-image-2','gpt-image-1.5','gpt-image-1','gpt-image-1-mini'],gm=['gemini-nano-banana-2.1','gemini-3.1-flash-image','gemini-3-pro-image','gemini-2.5-flash-image'];
+  const opt=(a,v)=>a.map(x=>`<option value="${x}" ${x===v?'selected':''}>${x}</option>`).join('');
+  openModal(`<h2><span class="d">$</span> settings · ai</h2>
+    <div class="dim">api keys are stored in this browser only. they are sent only to the provider you pick, and never go into a scene zip.</div>
+    <label class="dim">openai api key<input type="password" id="s-ok" autocomplete="off" spellcheck="false" placeholder="sk-…" value="${esc(cfg.openaiKey)}"></label>
+    <label class="dim">gemini api key<input type="password" id="s-gk" autocomplete="off" spellcheck="false" placeholder="AIza…" value="${esc(cfg.geminiKey)}"></label>
+    <label class="ckl"><input type="checkbox" id="s-show"> show keys</label>
+    <div class="two"><label class="dim">openai model<input type="text" id="s-om" list="dl-om" spellcheck="false" value="${esc(cfg.openaiModel)}"></label>
+    <label class="dim">gemini model<input type="text" id="s-gm" list="dl-gm" spellcheck="false" value="${esc(cfg.geminiModel)}"></label></div>
+    <datalist id="dl-om">${om.map(x=>`<option value="${x}">`).join('')}</datalist><datalist id="dl-gm">${gm.map(x=>`<option value="${x}">`).join('')}</datalist>
+    <div class="two"><label class="dim">picture size<select id="s-size">${opt(['small','medium','large'],cfg.size)}</select></label>
+    <label class="dim">quality (openai)<select id="s-q">${opt(['low','medium','high'],cfg.quality)}</select></label></div>
+    <details><summary>advanced · api addresses</summary>
+      <label class="dim">openai address<input type="text" id="s-ob" spellcheck="false" value="${esc(cfg.openaiBase)}"></label>
+      <label class="dim">gemini address<input type="text" id="s-gb" spellcheck="false" value="${esc(cfg.geminiBase)}"></label></details>
+    <div class="foot"><button class="cancel" id="s-x">cancel</button><button class="btn-clay" id="s-go">save</button></div>`,m=>{
+    $('#s-show',m).addEventListener('change',e=>{$('#s-ok',m).type=$('#s-gk',m).type=e.target.checked?'text':'password'});
+    $('#s-x',m).onclick=closeModal;
+    $('#s-go',m).onclick=()=>{
+      cfg.openaiKey=$('#s-ok',m).value.trim();cfg.geminiKey=$('#s-gk',m).value.trim();
+      cfg.openaiModel=$('#s-om',m).value.trim()||DEF.openaiModel;cfg.geminiModel=$('#s-gm',m).value.trim()||DEF.geminiModel;
+      cfg.size=$('#s-size',m).value;cfg.quality=$('#s-q',m).value;
+      cfg.openaiBase=$('#s-ob',m).value.trim()||DEF.openaiBase;cfg.geminiBase=$('#s-gb',m).value.trim()||DEF.geminiBase;
+      saveCfg();closeModal();toast('settings saved (this browser only)','good');
+    };
+  });
+}
+$('#b-set').onclick=openSettings;
+function initAI(){try{if(localStorage.getItem('lf-ailog')==='0')$('#ai').classList.add('shut')}catch(_){}$('#gprov').value=cfg.provider;renderJobs()}
+
+/* ---------- remove background (wand) ---------- */
+let sess=null;
+function autoColor(src){
+  const {data:d,width:w,height:h}=src;let r=0,g=0,b=0,n=0;
+  for(const [cx,cy] of [[0,0],[w-3,0],[0,h-3],[w-3,h-3]])for(let y=Math.max(0,cy);y<Math.min(h,cy+3);y++)for(let x=Math.max(0,cx);x<Math.min(w,cx+3);x++){const i=(y*w+x)*4;if(d[i+3]>=8){r+=d[i];g+=d[i+1];b+=d[i+2];n++}}
+  return n?[Math.round(r/n),Math.round(g/n),Math.round(b/n)]:[255,255,255];
+}
+function runBg(src,o){
+  const {data:d,width:w,height:h}=src,N=w*h,T=o.tol*3.5,T2=T*T,[br,bg,bb]=o.color;
+  const match=p=>{const i=p*4;if(d[i+3]<8)return true;const dr=d[i]-br,dg=d[i+1]-bg,db=d[i+2]-bb;return dr*dr+dg*dg+db*db<=T2};
+  let rem=new Uint8Array(N);
+  if(o.global){for(let p=0;p<N;p++)if(match(p))rem[p]=1}
+  else{
+    const st=new Int32Array(N);let sp=0;
+    const seed=p=>{if(!rem[p]&&match(p)){rem[p]=1;st[sp++]=p}};
+    for(let x=0;x<w;x++){seed(x);seed((h-1)*w+x)}for(let y=0;y<h;y++){seed(y*w);seed(y*w+w-1)}
+    while(sp){const p=st[--sp],x=p%w;
+      if(x>0)seed(p-1);if(x<w-1)seed(p+1);if(p>=w)seed(p-w);if(p<N-w)seed(p+w);}
+  }
+  const edgeOf=()=>{const m=new Uint8Array(N);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){const p=y*w+x;if(rem[p])continue;
+      if((x>0&&rem[p-1])||(x<w-1&&rem[p+1])||(y>0&&rem[p-w])||(y<h-1&&rem[p+w]))m[p]=1}
+    return m};
+  for(let k=0;k<o.trim;k++){const m=edgeOf();for(let p=0;p<N;p++)if(m[p])rem[p]=1}
+  const out=new Uint8ClampedArray(d),soft=edgeOf();let cnt=0;
+  for(let p=0;p<N;p++){if(rem[p]){out[p*4+3]=0;cnt++}else if(soft[p])out[p*4+3]=Math.round(out[p*4+3]*0.5)}
+  return {img:new ImageData(out,w,h),pct:Math.round(cnt/N*100)};
+}
+const wopts=()=>({color:sess.color,tol:+$('#wtol').value,trim:+$('#wtrim').value,global:$('#wglob').checked});
+function setSwatch(){if(sess)$('#wcol').style.background='rgb('+sess.color.join(',')+')'}
+function runWand(){if(!sess)return;clearTimeout(sess.t);sess.t=setTimeout(()=>{
+  if(!sess)return;const res=runBg(sess.src,wopts());sess.result=res.img;
+  sess.prevCv.getContext('2d').putImageData(res.img,0,0);sess.r.pv=sess.prevCv;sess.r.tc=null;
+  $('#wmsg').textContent=res.pct+'% of the layer is transparent';draw();
+},70)}
+async function enterWand(){
+  const L=sel();
+  if(!L){toast('select a layer first','warn');setTool('move');return}
+  if(L.lock||!L.vis){toast(L.lock?'that layer is locked':'that layer is hidden','warn');setTool('move');return}
+  const r=store.get(L.id);$('#wmsg').textContent='loading…';
+  if(r.pending)await r.pending;
+  if(r.pv.width!==r.w||r.pv.height!==r.h)await upgradePv(r);
+  if(state.tool!=='wand'||sel()?.id!==L.id)return;
+  const w=r.pv.width,h=r.pv.height,src=r.pv.getContext('2d').getImageData(0,0,w,h);
+  const prevCv=document.createElement('canvas');prevCv.width=w;prevCv.height=h;
+  sess={id:L.id,r,origCv:r.pv,prevCv,src,w,h,color:autoColor(src),result:null,t:0};
+  setSwatch();runWand();
+}
+function cancelWand(){const s=sess;if(!s)return;clearTimeout(s.t);sess=null;s.r.pv=s.origCv;$('#wmsg').textContent='';draw()}
+function wandPick(p){
+  if(!sess)return;const L=sel();if(!L)return;const sp=toScene(p),[lx,ly]=s2l(L,sp.x,sp.y),x=Math.floor(lx),y=Math.floor(ly);
+  if(x<0||y<0||x>=sess.w||y>=sess.h)return toast('click on the layer to pick its background colour','warn');
+  const d=sess.src.data,i=(y*sess.w+x)*4;if(d[i+3]<8)return toast('that spot is already transparent','warn');
+  sess.color=[d[i],d[i+1],d[i+2]];setSwatch();runWand();
+}
+async function applyWand(s0,o0){
+  const s=s0||sess;if(!s||!s.result)return;clearTimeout(s.t);
+  const res=runBg(s.src,o0||wopts()),d=res.img.data,w=s.w,h=s.h;
+  let minx=w,miny=h,maxx=-1,maxy=-1;
+  for(let y=0;y<h;y++){const row=y*w*4+3;for(let x=0;x<w;x++)if(d[row+x*4]>0){if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y}}
+  if(maxx<0)return toast('that would remove everything - lower the tolerance','warn');
+  const r=s.r,L=state.layers.find(l=>l.id===s.id);if(!L)return;
+  const before=snapshot(),prevBlob=r.blob;
+  s.prevCv.getContext('2d').putImageData(res.img,0,0);
+  const nw=maxx-minx+1,nh=maxy-miny+1;if(s===sess)sess=null;
+  if(nw!==w||nh!==h){ // keep the layer trimmed to its content, picture stays exactly where it was
+    const c2=document.createElement('canvas');c2.width=nw;c2.height=nh;c2.getContext('2d').drawImage(s.prevCv,minx,miny,nw,nh,0,0,nw,nh);r.pv=c2;
+    const Px=L.px*L.w,Py=L.py*L.h,Cx=L.x+Px,Cy=L.y+Py,nPx=Px-minx,nPy=Py-miny;
+    L.w=nw;L.h=nh;r.w=nw;r.h=nh;L.px=nPx/nw;L.py=nPy/nh;L.x=Cx-nPx;L.y=Cy-nPy;setPivot(L,.5,.5);L.x=Math.round(L.x);L.y=Math.round(L.y);
+  }else r.pv=s.prevCv;
+  U.push({px:L.id,blob:prevBlob,meta:before});if(U.length>100)U.shift();R.length=0;
+  r.pending=toBlobAsync(r.pv).then(b=>{r.blob=b;savedBlobs.delete(L.id);r.pending=null;saveSoon()});
+  Object.assign(r,maskFrom(r.pv));lastStruct='';tcache.clear();$('#wmsg').textContent='';if(state.tool==='wand')setTool('move');changed();
+  if(!s0)toast('background removed · '+res.pct+'% now transparent','good');
+}
+async function cornersFlat(blob){ // true when all four corners are solid and about the same colour (a flat backdrop)
+  try{
+    const bm=await createImageBitmap(blob),k=Math.min(1,256/Math.max(bm.width,bm.height)),w=Math.max(8,Math.round(bm.width*k)),h=Math.max(8,Math.round(bm.height*k));
+    const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(bm,0,0,w,h);bm.close&&bm.close();
+    const cs=[[0,0],[w-3,0],[0,h-3],[w-3,h-3]].map(([cx,cy])=>{const d=x.getImageData(cx,cy,3,3).data;let r=0,g=0,b=0,a=0;for(let i=0;i<36;i+=4){r+=d[i];g+=d[i+1];b+=d[i+2];a+=d[i+3]}return [r/9,g/9,b/9,a/9]});
+    c.width=c.height=0;
+    if(cs.some(q=>q[3]<235))return false;
+    return cs.every(q=>Math.hypot(q[0]-cs[0][0],q[1]-cs[0][1],q[2]-cs[0][2])<48);
+  }catch(e){return false}
+}
+async function autoBgSel(){
+  const ids=selIds();let n=0,skip=0;
+  for(const id of ids){try{(await autoWandLayer(id))?n++:skip++}catch(e){console.error(e);skip++}}
+  toast(n?'removed the background from '+n+' layer'+(n>1?'s':'')+(skip?' ('+skip+' had none)':'')+' · ctrl+z undoes one at a time':'nothing to remove: the corners are already see-through','good');
+}
+async function autoWandLayer(id){ // remove a flat background from a layer without opening the wand: false when it has none
+  const L=state.layers.find(l=>l.id===id),r=store.get(id);if(!L||!r||L.lock)return false;
+  if(r.pending)await r.pending;
+  if(r.pv.width!==r.w||r.pv.height!==r.h)await upgradePv(r);
+  const w=r.pv.width,h=r.pv.height,src=r.pv.getContext('2d').getImageData(0,0,w,h),d=src.data;
+  let solid=0;for(const [x,y] of [[0,0],[w-1,0],[0,h-1],[w-1,h-1]])if(d[(y*w+x)*4+3]>=200)solid++;
+  if(solid<3)return false; // corners already see-through
+  const color=autoColor(src),prevCv=document.createElement('canvas');prevCv.width=w;prevCv.height=h;
+  await applyWand({id,r,origCv:r.pv,prevCv,src,w,h,color,result:true,t:0},{color,tol:30,trim:1,global:false});
+  return true;
+}
+$('#wtol').addEventListener('input',e=>{$('#wtv').textContent=e.target.value;runWand()});
+$('#wtrim').addEventListener('input',e=>{$('#wtrv').textContent=e.target.value+'px';runWand()});
+$('#wglob').addEventListener('change',runWand);
+$('#wauto').onclick=()=>{if(sess){sess.color=autoColor(sess.src);setSwatch();runWand()}};
+$('#wapply').onclick=()=>applyWand();
+$('#wcancel').onclick=()=>{cancelWand();setTool('move')};
+async function geminiRaw(j,prompt,b64,ar,szo){
+  const base=cfg.geminiBase.replace(/\/+$/,''),model=(cfg.geminiModel||DEF.geminiModel).trim(),key=cfg.geminiKey.trim(),size=szo||{small:'1K',medium:'2K',large:'4K'}[cfg.size]||'2K';
+  const hdr={'x-goog-api-key':key,'Content-Type':'application/json'};
+  let r=await fetchApi(base+'/v1beta/interactions',{method:'POST',headers:hdr,signal:j.ac.signal,body:JSON.stringify({model,input:[{type:'text',text:prompt},{type:'image',mime_type:'image/png',data:b64}],response_format:{type:'image',mime_type:'image/png',aspect_ratio:ar,image_size:size}})});
+  let js;
+  if(r.ok)js=await r.json();
+  else{
+    const e1=await apiErr(r);if(![400,404,405].includes(r.status))throw new Error(e1);
+    r=await fetchApi(base+'/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:hdr,signal:j.ac.signal,body:JSON.stringify({contents:[{parts:[{text:prompt},{inline_data:{mime_type:'image/png',data:b64}}]}],generationConfig:{responseModalities:['IMAGE'],imageConfig:{aspectRatio:ar,imageSize:size}}})});
+    if(!r.ok)throw new Error(e1+'  |  fallback '+await apiErr(r));
+    js=await r.json();
+  }
+  return findImage(js);
+}
+/* ---------- cut out (click an element → its own layer) + gap fill ---------- */
+let cs=null,cutN=0;
+const lumOf=(d,i)=>(d[i]*54+d[i+1]*183+d[i+2]*19)>>8;
+function dilate(m,w,h,n){
+  const N=w*h;let cur=m;
+  for(let k=0;k<n;k++){const nx=new Uint8Array(cur);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){const p=y*w+x;if(cur[p])continue;
+      if((x>0&&cur[p-1])||(x<w-1&&cur[p+1])||(y>0&&cur[p-w])||(y<h-1&&cur[p+w])||(x>0&&y>0&&cur[p-w-1])||(x<w-1&&y>0&&cur[p-w+1])||(x>0&&y<h-1&&cur[p+w-1])||(x<w-1&&y<h-1&&cur[p+w+1]))nx[p]=1}
+    cur=nx}
+  return cur;
+}
+function cutRegion(src,sx,sy,o){
+  const {data:d,width:w,height:h}=src,N=w*h,p0=sy*w+sx;
+  if(d[p0*4+3]<8)return null;
+  const thr=30+o.tol*1.2,dark=p=>lumOf(d,p*4)<thr,solid=p=>d[p*4+3]>=8;
+  const st=new Int32Array(N);let sp=0;
+  const flood=(seed,ok,m)=>{m[seed]=1;st[0]=seed;sp=1;
+    while(sp){const p=st[--sp],x=p%w;
+      if(x>0&&!m[p-1]&&ok(p-1)){m[p-1]=1;st[sp++]=p-1}
+      if(x<w-1&&!m[p+1]&&ok(p+1)){m[p+1]=1;st[sp++]=p+1}
+      if(p>=w&&!m[p-w]&&ok(p-w)){m[p-w]=1;st[sp++]=p-w}
+      if(p<N-w&&!m[p+w]&&ok(p+w)){m[p+w]=1;st[sp++]=p+w}}};
+  let m=new Uint8Array(N);
+  if(o.mode==='region'){ // one coloured area inside the outlines (a rocket's body, say), not crossing a dark line
+    const ok=p=>solid(p)&&!dark(p);let s2=p0;
+    if(!ok(s2)){for(let r=1;r<=12&&s2===p0;r++)for(let dy=-r;dy<=r&&s2===p0;dy++)for(let dx=-r;dx<=r;dx++){if(Math.max(Math.abs(dx),Math.abs(dy))!==r)continue;const X=sx+dx,Y=sy+dy;if(X<0||Y<0||X>=w||Y>=h)continue;if(ok(Y*w+X)){s2=Y*w+X;break}}}
+    if(!ok(s2))return null;
+    flood(s2,ok,m);
+  }else if(o.mode==='colour'){
+    const i0=p0*4,r=d[i0],g=d[i0+1],b=d[i0+2],T=o.tol*3.5,T2=T*T;
+    flood(p0,p=>{const i=p*4;if(d[i+3]<8)return false;const dr=d[i]-r,dg=d[i+1]-g,db=d[i+2]-b;return dr*dr+dg*dg+db*db<=T2},m);
+  }else{
+    // 1. everything reachable from the picture's edge without crossing a dark outline is "outside"
+    const pass=p=>!solid(p)||!dark(p),O=new Uint8Array(N);sp=0;
+    const sd=p=>{if(!O[p]&&pass(p)){O[p]=1;st[sp++]=p}};
+    for(let x=0;x<w;x++){sd(x);sd((h-1)*w+x)}for(let y=0;y<h;y++){sd(y*w);sd(y*w+w-1)}
+    while(sp){const p=st[--sp],x=p%w;if(x>0)sd(p-1);if(x<w-1)sd(p+1);if(p>=w)sd(p-w);if(p<N-w)sd(p+w)}
+    // a click on a thin outline: use a nearby interior pixel
+    const seed=p0;
+    if(!O[seed]){ // inside an object (or on its outline): take the whole object = the connected blob that is not outside
+      const q=new Uint8Array(N);sp=0;q[seed]=1;st[sp++]=seed;
+      while(sp){const p=st[--sp],x=p%w,y=(p/w)|0;
+        for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;const X=x+dx,Y=y+dy;if(X<0||Y<0||X>=w||Y>=h)continue;const n=Y*w+X;if(!q[n]&&!O[n]&&solid(n)){q[n]=1;st[sp++]=n}}}
+      m=q;
+    }else{ // click landed in a pocket open to the picture's edge (e.g. an object cut off by the border): fill the pocket
+      let ok=p=>solid(p)&&!dark(p),s2=seed;
+      if(!ok(s2)){for(let r=1;r<=4&&s2===seed;r++)for(let dy=-r;dy<=r&&s2===seed;dy++)for(let dx=-r;dx<=r;dx++){if(Math.max(Math.abs(dx),Math.abs(dy))!==r)continue;const X=sx+dx,Y=sy+dy;if(X<0||Y<0||X>=w||Y>=h)continue;if(ok(Y*w+X)){s2=Y*w+X;break}}}
+      if(s2===seed&&!ok(seed))return null;
+      flood(s2,ok,m);
+    }
+  }
+  const plain=o.mode==='colour'||o.mode==='region';
+  // fill holes: anything not reachable from the border without crossing the region belongs to it (not for an area: a window inside the body stays out)
+  const out=new Uint8Array(N);sp=0;if(o.mode!=='region'){
+  const sd2=p=>{if(!m[p]&&!out[p]){out[p]=1;st[sp++]=p}};
+  for(let x=0;x<w;x++){sd2(x);sd2((h-1)*w+x)}for(let y=0;y<h;y++){sd2(y*w);sd2(y*w+w-1)}
+  while(sp){const p=st[--sp],x=p%w;if(x>0)sd2(p-1);if(x<w-1)sd2(p+1);if(p>=w)sd2(p-w);if(p<N-w)sd2(p+w)}
+  for(let p=0;p<N;p++)if(!m[p]&&!out[p])m[p]=1;}
+  // grow outwards: in outline mode through dark-ish pixels only (so the outline comes along), in colour mode plainly
+  let front=[];for(let y=0;y<h;y++)for(let x=0;x<w;x++){const p=y*w+x;if(m[p]&&((x>0&&!m[p-1])||(x<w-1&&!m[p+1])||(y>0&&!m[p-w])||(y<h-1&&!m[p+w])))front.push(p)}
+  const lenient=Math.min(255,thr+70);
+  for(let k=0;k<o.grow&&front.length;k++){const nf=[];
+    for(const p of front){const x=p%w,y=(p/w)|0;
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;const X=x+dx,Y=y+dy;if(X<0||Y<0||X>=w||Y>=h)continue;const q=Y*w+X;
+        if(m[q]||d[q*4+3]<8)continue;
+        if(!plain&&lumOf(d,q*4)>=lenient)continue;
+        m[q]=1;nf.push(q)}}
+    front=nf}
+  return m;
+}
+const copts=()=>({mode:$('#cmode').value,tol:+$('#ctol').value,grow:+$('#cout').value});
+function cutRun(){
+  if(!cs)return;clearTimeout(cs.t);cs.t=setTimeout(()=>{
+    if(!cs)return;const o=copts(),N=cs.w*cs.h,mask=new Uint8Array(N);let any=false;
+    let miss=0;cs.dbg=[];for(const s of cs.seeds){const m=cutRegion(cs.src,s.x,s.y,o);if(m){any=true;let nw=0;for(let p=0;p<N;p++)if(m[p]){if(!mask[p])nw++;mask[p]=1}cs.dbg.push(nw)}else{miss++;cs.dbg.push(0)}}
+    cs.mask=any?mask:null;
+    const pd=new Uint8ClampedArray(cs.src.data);let cnt=0;
+    if(any)for(let p=0;p<N;p++)if(mask[p]){cnt++;const i=p*4;pd[i]=(pd[i]+217)>>1;pd[i+1]=(pd[i+1]+119)>>1;pd[i+2]=(pd[i+2]+87)>>1}
+    cs.cnt=cnt;cs.prev.getContext('2d').putImageData(new ImageData(pd,cs.w,cs.h),0,0);cs.r.pv=cs.prev;cs.r.tc=null;
+    const pct=Math.round(cnt/N*100);
+    $('#cmsg').textContent=any?(pct>55?pct+'% picked - that looks like it leaked, try a higher tolerance or the other mode':pct+'% of the layer picked · '+cs.seeds.length+' click'+(cs.seeds.length>1?'s':'')+(miss?' ('+miss+' found nothing - click inside the colour, away from the outline)':'')+' · new px per click: '+cs.dbg.join(', ')+' · layer "'+((state.layers.find(l=>l.id===cs.id)||{}).name||'?')+'" '+cs.w+'x'+cs.h+' · shift-click or ＋ add adds more'):(cs.seeds.length>1?'nothing there to add - click inside a coloured area, not on the outline':'click an element');
+    draw();
+  },60)
+}
+async function enterCut(L){
+  if(L.lock){toast('that layer is locked','warn');return false}
+  if(jobs.some(j=>j.kind==='fill'&&j.layerId===L.id&&(j.status==='running'||j.status==='queued'))){toast('gap fill is still running on that layer','warn');return false}
+  const r=store.get(L.id);if(r.pending)await r.pending;
+  if(r.pv.width!==r.w||r.pv.height!==r.h)await upgradePv(r);
+  const w=r.pv.width,h=r.pv.height,src=r.pv.getContext('2d').getImageData(0,0,w,h),prev=document.createElement('canvas');prev.width=w;prev.height=h;
+  cs={id:L.id,r,origCv:r.pv,prev,src,w,h,seeds:[],mask:null,cnt:0,t:0};
+  if(state.sel!==L.id){state.sel=L.id;changed()}
+  return true;
+}
+function cancelCut(){const s=cs;if(!s)return;clearTimeout(s.t);cs=null;s.r.pv=s.origCv;draw()}
+async function cutPick(p,add){
+  const sp=toScene(p),hit=hitLayer(sp.x,sp.y);
+  if(!hit){toast('click on a layer','warn');return}
+  if(!cs||cs.id!==hit.id){if(cs&&add)toast('that click is on a different layer, so it started a new pick there (adding only works inside one layer)','warn');cancelCut();if(!await enterCut(hit))return;add=false}
+  const L=hit,[lx,ly]=s2l(L,sp.x,sp.y),x=Math.floor(lx),y=Math.floor(ly);
+  if(x<0||y<0||x>=cs.w||y>=cs.h)return;
+  if(cs.src.data[(y*cs.w+x)*4+3]<8)return toast('that spot is transparent','warn');
+  if(add)cs.seeds.push({x,y});else cs.seeds=[{x,y}];
+  if(add)toast('added click '+cs.seeds.length+' on "'+L.name+'" at '+x+','+y+' of '+cs.w+'x'+cs.h);
+  $('#cmsg').textContent='…';cutRun();
+}
+var cutAdd=false;$('#cadd').addEventListener('click',()=>{cutAdd=!cutAdd;$('#cadd').setAttribute('aria-pressed',cutAdd);$('#cadd').classList.toggle('on',cutAdd)});
+function cutClear(){if(!cs)return;cs.seeds=[];cs.mask=null;cs.r.pv=cs.origCv;$('#cmsg').textContent='click an element';draw()}
+async function applyCut(){
+  const s=cs;if(!s||!s.mask)return toast('click an element first','warn');clearTimeout(s.t);
+  const L=state.layers.find(l=>l.id===s.id);if(!L)return;
+  const {w,h,mask,src}=s,N=w*h,d=src.data,leave=$('#cmove').checked,region=$('#cmode').value==='region';
+  // the new layer reaches 2px under the surrounding outline so the two never leave a see-through seam when scaled or turned; the hole in the original stays exactly the picked area
+  const cmask=region?(()=>{const dm=dilate(mask,w,h,2);for(let p=0;p<N;p++)if(dm[p]&&d[p*4+3]<8)dm[p]=0;return dm})():mask;
+  let minx=w,miny=h,maxx=-1,maxy=-1;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(cmask[y*w+x]){if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y}
+  if(maxx<0)return;
+  const nw=maxx-minx+1,nh=maxy-miny+1,od=new Uint8ClampedArray(nw*nh*4);
+  for(let y=0;y<nh;y++)for(let x=0;x<nw;x++){
+    const p=(y+miny)*w+(x+minx);if(!cmask[p])continue;const i=p*4,o=(y*nw+x)*4;
+    od[o]=d[i];od[o+1]=d[i+1];od[o+2]=d[i+2];
+    const X=x+minx,Y=y+miny,edge=(X>0&&!cmask[p-1])||(X<w-1&&!cmask[p+1])||(Y>0&&!cmask[p-w])||(Y<h-1&&!cmask[p+w]);
+    od[o+3]=(edge&&!region)?d[i+3]>>1:d[i+3]}
+  const c2=document.createElement('canvas');c2.width=nw;c2.height=nh;c2.getContext('2d').putImageData(new ImageData(od,nw,nh),0,0);
+  const nb=await toBlobAsync(c2);c2.width=c2.height=0;
+  const rr=await makeRec(nb,{trim:false});if(!rr)return;
+  if(cs!==s)return; // user moved on meanwhile
+  const id=newId();store.set(id,rr.rec);
+  const before=snapshot(),r=s.r,prevBlob=r.blob;
+  const Px=L.px*L.w,Py=L.py*L.h,Cx=L.x+Px,Cy=L.y+Py,nPx=Px-minx,nPy=Py-miny;
+  const L2={id,name:region?L.name+' area '+(++cutN):'cut '+(++cutN),x:Cx-nPx,y:Cy-nPy,w:nw,h:nh,scale:L.scale,rot:L.rot,px:nPx/nw,py:nPy/nh,op:L.op,vis:true,lock:false,ai:false};
+  setPivot(L2,.5,.5);L2.x=Math.round(L2.x);L2.y=Math.round(L2.y);
+  if(L.tint){L2.tint=L.tint;L2.tm=L.tm;L2.ta=L.ta}
+  if(region&&$('#cattach').checked)L2.par=L.par||L.id;
+  const at=state.layers.findIndex(l=>l.id===L.id)+1;state.layers.splice(at,0,L2);
+  if(region)state.sel=id;
+  if(leave){
+    const sd=new Uint8ClampedArray(d);for(let p=0;p<N;p++)if(mask[p])sd[p*4+3]=0;
+    const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').putImageData(new ImageData(sd,w,h),0,0);
+    r.pv=c;U.push({px:L.id,blob:prevBlob,meta:before});if(U.length>100)U.shift();R.length=0;
+    r.pending=toBlobAsync(c).then(b=>{r.blob=b;savedBlobs.delete(L.id);r.pending=null;saveSoon()});
+    Object.assign(r,maskFrom(c));
+  }else{U.push(before);if(U.length>100)U.shift();R.length=0;r.pv=s.origCv}
+  cs=null;lastStruct='';changed();
+  toast('cut out → "'+L2.name+'"'+(leave?' · a hole is left in '+L.name:''),'good');
+  await enterCut(L);cutRun();
+}
+function enqueueFill(){
+  const L=sel();if(!L)return toast('select a layer first','warn');
+  if(!(cfg.provider==='openai'?cfg.openaiKey:cfg.geminiKey).trim()){toast('add your '+cfg.provider+' api key first','warn');openSettings();return}
+  cancelCut();
+  jobs.push({id:++jobN,text:'fill gaps',kind:'fill',layerId:L.id,provider:cfg.provider,afterId:L.id,pos:'above',status:'queued',name:'fill gaps · '+L.name.slice(0,18),ac:null});
+  renderJobs();runQueue();
+}
+async function runFill(j){
+  j.ac=new AbortController();
+  const L=state.layers.find(l=>l.id===j.layerId),r=store.get(j.layerId);if(!L||!r)throw new Error('that layer is gone');
+  if(r.pending)await r.pending;
+  const bm=await createImageBitmap(r.blob),w=bm.width,h=bm.height,N=w*h;
+  const c=document.createElement('canvas');c.width=w;c.height=h;const cx=c.getContext('2d',{willReadFrequently:true});cx.drawImage(bm,0,0);bm.close&&bm.close();
+  const full=cx.getImageData(0,0,w,h),d=full.data;
+  let hole=new Uint8Array(N),cnt=0;for(let p=0;p<N;p++)if(d[p*4+3]<128){hole[p]=1;cnt++}
+  if(!cnt)throw new Error('no gaps in that layer - cut something out first');
+  if(cnt>N*.6)throw new Error('that layer is mostly empty - gap fill is for a scene picture with holes cut out of it');
+  hole=dilate(hole,w,h,3);
+  const model=(cfg.openaiModel||DEF.openaiModel).trim();
+  const long={small:1024,medium:1536,large:2048}[cfg.size]||1536,k=Math.min(1,long/Math.max(w,h));
+  let aw=Math.max(16,Math.round(w*k)),ah=Math.max(16,Math.round(h*k));
+  let size=null;
+  if(j.provider==='openai'){size=openaiSize(model,w/h,long);[aw,ah]=size.split('x').map(Number)}
+  // picture sent to the model, with the gaps painted flat
+  const hc=document.createElement('canvas');hc.width=w;hc.height=h;
+  {const hd=new Uint8ClampedArray(N*4);for(let p=0;p<N;p++)if(hole[p])hd[p*4+3]=255;hc.getContext('2d').putImageData(new ImageData(hd,w,h),0,0)}
+  const sc=document.createElement('canvas');sc.width=aw;sc.height=ah;const sx=sc.getContext('2d',{willReadFrequently:true});
+  sx.imageSmoothingQuality='high';sx.drawImage(c,0,0,aw,ah);
+  const sd=sx.getImageData(0,0,aw,ah);
+  const hs=document.createElement('canvas');hs.width=aw;hs.height=ah;const hx=hs.getContext('2d',{willReadFrequently:true});hx.drawImage(hc,0,0,aw,ah);
+  const hsd=hx.getImageData(0,0,aw,ah).data,md=new Uint8ClampedArray(aw*ah*4),fill=j.provider==='openai'?[128,128,128]:[255,0,255];
+  for(let p=0;p<aw*ah;p++){const i=p*4,inH=hsd[i+3]>20||sd.data[i+3]<128;
+    if(inH){sd.data[i]=fill[0];sd.data[i+1]=fill[1];sd.data[i+2]=fill[2];md[i+3]=0}else md[i+3]=255;
+    sd.data[i+3]=255}
+  sx.putImageData(sd,0,0);
+  const imgBlob=await toBlobAsync(sc);
+  const mc=document.createElement('canvas');mc.width=aw;mc.height=ah;mc.getContext('2d').putImageData(new ImageData(md,aw,ah),0,0);
+  const prompt=j.provider==='openai'
+    ?'This is one layer of a 2D game scene. The masked (transparent) areas are gaps where objects were removed. Repaint ONLY the masked areas so they continue the surrounding background naturally: same art style, colours, lighting and patterns. Do not add any characters, objects, text or other new details. Keep everything outside the mask exactly as it is.'
+    :'This is one layer of a 2D game scene. The flat magenta (#FF00FF) areas are gaps where objects were removed. Repaint ONLY the magenta areas so they continue the surrounding background naturally: same art style, colours, lighting and patterns. No magenta may remain. Do not add any characters, objects, text or other new details. Keep everything else exactly as it is.';
+  let res;
+  if(j.provider==='openai'){
+    const fd=new FormData();fd.append('model',model);fd.append('prompt',prompt);fd.append('image[]',imgBlob,'layer.png');fd.append('mask',await toBlobAsync(mc),'mask.png');
+    fd.append('size',size);fd.append('quality',cfg.quality);fd.append('output_format','png');fd.append('n','1');
+    const rs=await fetchApi(cfg.openaiBase.replace(/\/+$/,'')+'/v1/images/edits',{method:'POST',headers:{Authorization:'Bearer '+cfg.openaiKey.trim()},body:fd,signal:j.ac.signal});
+    if(!rs.ok)throw new Error(await apiErr(rs));
+    res=findImage(await rs.json());
+  }else{
+    res=await geminiRaw(j,prompt,await blobB64(imgBlob),(()=>{const a=aw/ah,o={'1:1':1,'3:2':1.5,'2:3':2/3,'3:4':.75,'4:3':4/3,'4:5':.8,'5:4':1.25,'9:16':9/16,'16:9':16/9,'21:9':21/9};return Object.keys(o).reduce((b,q)=>Math.abs(o[q]-a)<Math.abs(o[b]-a)?q:b,'1:1')})());
+  }
+  if(!res)throw new Error('the model answered without a picture');
+  if(j.status==='cancelled')return;
+  // paste the new paint into the gaps only; everything else stays pixel-identical
+  const rb=await createImageBitmap(b64Blob(res.data,res.mime||'image/png'));
+  const rc=document.createElement('canvas');rc.width=w;rc.height=h;const rx=rc.getContext('2d',{willReadFrequently:true});rx.imageSmoothingQuality='high';rx.drawImage(rb,0,0,w,h);rb.close&&rb.close();
+  const rd=rx.getImageData(0,0,w,h).data;
+  for(let p=0;p<N;p++)if(hole[p]){const i=p*4;d[i]=rd[i];d[i+1]=rd[i+1];d[i+2]=rd[i+2];d[i+3]=255}
+  cx.putImageData(full,0,0);
+  const blob=await toBlobAsync(c);
+  if(!state.layers.some(l=>l.id===j.layerId))return;
+  pushUndoPx(j.layerId,r.blob);await applyBlob(j.layerId,blob);
+  toast('gaps filled in '+L.name,'good');
+}
+$('#cmode').addEventListener('change',e=>{const v=e.target.value,g=v==='colour'?1:v==='region'?2:6;$('#cout').value=g;$('#cov').textContent=g+'px';$('#cattl').hidden=v!=='region';if(cs)cutClear();$('#cmsg').textContent=v==='region'?'click a coloured area inside the outline':'click an element'});
+$('#ctol').addEventListener('input',e=>{$('#ctv').textContent=e.target.value;cutRun()});
+$('#cout').addEventListener('input',e=>{$('#cov').textContent=e.target.value+'px';cutRun()});
+$('#ccut').onclick=applyCut;$('#cclear').onclick=cutClear;$('#cfill').onclick=enqueueFill;
+
+/* ---------- redraw: draw a selection on a layer, the ai repaints only that part ---------- */
+let rd={id:null,shapes:[],cur:null,mode:'lasso',hover:null};
+const rdSize=()=>+$('#rsz').value;
+function rdLayer(){const L=sel();return L&&store.get(L.id)?L:null}
+function rdDown(e,p){
+  const L=rdLayer();if(!L){toast('select a layer first, then draw on it','warn');return}
+  if(L.lock||!L.vis){toast(L.lock?'that layer is locked':'that layer is hidden','warn');return}
+  if(rd.id!==L.id){rd.id=L.id;rd.shapes=[]}
+  const sub=e.altKey;if(!(e.shiftKey||sub)&&rd.mode!=='brush')rd.shapes=[];
+  const sp=toScene(p),[lx,ly]=s2l(L,sp.x,sp.y);
+  rd.cur={pid:e.pointerId,type:rd.mode,sub,pts:[[lx,ly]],w:rdSize()/L.scale};
+  rdMsg();draw();
+}
+function rdMove(p){
+  const L=rdLayer();if(!L||!rd.cur)return;const sp=toScene(p),[lx,ly]=s2l(L,sp.x,sp.y),c=rd.cur;
+  if(c.type==='rect')c.pts[1]=[lx,ly];else{const q=c.pts[c.pts.length-1];if(Math.hypot(lx-q[0],ly-q[1])*L.scale*view.z>2)c.pts.push([lx,ly])}
+  draw();
+}
+function rdUp(){
+  const c=rd&&rd.cur;if(!c)return;rd.cur=null;
+  const ok=c.type==='rect'?c.pts.length>1&&Math.abs(c.pts[1][0]-c.pts[0][0])>2&&Math.abs(c.pts[1][1]-c.pts[0][1])>2:c.type==='lasso'?c.pts.length>2:c.pts.length>0;
+  if(ok)rd.shapes.push(c);rdMsg();draw();
+}
+addEventListener('pointerup',e=>{if(rd&&rd.cur&&e.pointerId===rd.cur.pid)rdUp()});
+addEventListener('pointercancel',e=>{if(rd&&rd.cur&&e.pointerId===rd.cur.pid){rd.cur=null;draw()}});
+function rdClear(){rd.shapes=[];rd.cur=null;rdMsg();draw()}
+function rdMsg(){$('#rmsg').textContent=rd.shapes.length?'selection ready · type what it should be and redraw (enter), or cut it to a new layer':'draw round a part (shift = add, alt = take away), then redraw or cut it out'}
+// paint all shapes into a layer-sized canvas context (white = selected); g = grow in layer px
+function rdPaint(x,shapes,g){
+  x.lineJoin='round';x.lineCap='round';
+  for(const s of shapes){
+    x.globalCompositeOperation=s.sub?'destination-out':'source-over';x.fillStyle=x.strokeStyle='#fff';
+    x.beginPath();
+    if(s.type==='rect'&&s.pts[1]){const [a,b]=s.pts;x.rect(Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.abs(a[0]-b[0]),Math.abs(a[1]-b[1]));x.fill();if(g){x.lineWidth=g*2;x.stroke()}}
+    else if(s.type==='lasso'){s.pts.forEach((q,i)=>i?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1]));x.closePath();x.fill();if(g){x.lineWidth=g*2;x.stroke()}}
+    else if(s.type==='brush'){x.lineWidth=s.w+g*2;s.pts.forEach((q,i)=>i?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1]));if(s.pts.length===1)x.lineTo(s.pts[0][0]+.01,s.pts[0][1]);x.stroke()}
+  }
+  x.globalCompositeOperation='source-over';
+}
+function rdOverlay(){
+  const L=rdLayer();if(!L||rd.id!==L.id)return;
+  const all=rd.cur?[...rd.shapes,rd.cur]:rd.shapes;
+  const P=q=>{const [sx,sy]=l2s(L,q[0],q[1]);return toScreen([sx,sy])};
+  ctx.save();ctx.lineJoin='round';ctx.lineCap='round';
+  for(const s of all){
+    const pts=s.pts.map(P);if(!pts.length)continue;
+    ctx.beginPath();
+    if(s.type==='rect'){if(!s.pts[1])continue;const [a,b]=s.pts,c=[[a[0],a[1]],[b[0],a[1]],[b[0],b[1]],[a[0],b[1]]].map(P);c.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.closePath()}
+    else{pts.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));if(s.type==='lasso')ctx.closePath()}
+    if(s.type==='brush'){ctx.strokeStyle=s.sub?'rgba(120,200,255,.35)':'rgba(217,119,87,.38)';ctx.lineWidth=s.w*L.scale*view.z;ctx.stroke()}
+    else{ctx.fillStyle=s.sub?'rgba(120,200,255,.22)':'rgba(217,119,87,.28)';ctx.fill();ctx.strokeStyle=s.sub?'#78C8FF':'#D97757';ctx.lineWidth=1.5;ctx.setLineDash([6,4]);ctx.stroke();ctx.setLineDash([])}
+  }
+  if(rd.mode==='brush'&&rd.hover&&state.tool==='redraw'){const rr=Math.max(2,rdSize()*view.z/2);ctx.lineWidth=1;ctx.strokeStyle='#E8E6DC';ctx.beginPath();ctx.arc(rd.hover.x,rd.hover.y,rr,0,7);ctx.stroke()}
+  ctx.restore();
+}
+async function rdCut(){
+  const L=rdLayer();if(!L)return toast('select a layer first','warn');
+  if(!rd.shapes.length||rd.id!==L.id)return toast('draw a selection on the layer first','warn');
+  const r=store.get(L.id);if(r.pending)await r.pending;
+  const shapes=JSON.parse(JSON.stringify(rd.shapes)),leave=$('#rleave').checked;
+  const bm=await createImageBitmap(r.blob),w=bm.width,h=bm.height;
+  const oc=document.createElement('canvas');oc.width=w;oc.height=h;const ox=oc.getContext('2d',{willReadFrequently:true});ox.drawImage(bm,0,0);bm.close&&bm.close();
+  const orig=ox.getImageData(0,0,w,h),d=orig.data;
+  const mc=document.createElement('canvas');mc.width=w;mc.height=h;const mx=mc.getContext('2d',{willReadFrequently:true});rdPaint(mx,shapes,0);
+  const md=mx.getImageData(0,0,w,h).data;
+  let minx=w,miny=h,maxx=-1,maxy=-1;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){const p=y*w+x;if(md[p*4+3]>0&&d[p*4+3]>0){if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y}}
+  if(maxx<0)return toast('nothing but empty space inside that selection','warn');
+  const nw=maxx-minx+1,nh=maxy-miny+1,od=new Uint8ClampedArray(nw*nh*4);
+  for(let y=0;y<nh;y++)for(let x=0;x<nw;x++){const p=(y+miny)*w+(x+minx),i=p*4,o=(y*nw+x)*4,m=md[i+3]/255;if(!m)continue;od[o]=d[i];od[o+1]=d[i+1];od[o+2]=d[i+2];od[o+3]=Math.round(d[i+3]*m)}
+  const c2=document.createElement('canvas');c2.width=nw;c2.height=nh;c2.getContext('2d').putImageData(new ImageData(od,nw,nh),0,0);
+  const nb=await toBlobAsync(c2);c2.width=c2.height=0;
+  const rr=await makeRec(nb,{trim:false});if(!rr)return;
+  if(!state.layers.some(l=>l.id===L.id))return;
+  const id=newId();store.set(id,rr.rec);
+  const before=snapshot(),prevBlob=r.blob;
+  const Px=L.px*L.w,Py=L.py*L.h,Cx=L.x+Px,Cy=L.y+Py,nPx=Px-minx,nPy=Py-miny;
+  const L2={id,name:'cut '+(++cutN),x:Cx-nPx,y:Cy-nPy,w:nw,h:nh,scale:L.scale,rot:L.rot,px:nPx/nw,py:nPy/nh,op:L.op,vis:true,lock:false,ai:false};
+  if(L.tint){L2.tint=L.tint;L2.tm=L.tm;L2.ta=L.ta}
+  setPivot(L2,.5,.5);
+  state.layers.splice(state.layers.findIndex(l=>l.id===L.id)+1,0,L2);
+  if(leave){
+    for(let p=0;p<w*h;p++){const m=md[p*4+3];if(m)d[p*4+3]=Math.round(d[p*4+3]*(1-m/255))}
+    ox.putImageData(orig,0,0);
+    const hb=await toBlobAsync(oc);
+    U.push({px:L.id,blob:prevBlob,meta:before});if(U.length>100)U.shift();R.length=0;
+    await applyBlob(L.id,hb);
+  }else{U.push(before);if(U.length>100)U.shift();R.length=0;lastStruct='';changed()}
+  rdClear();
+  toast('cut to new layer "'+L2.name+'" in the same place'+(leave?' · a hole is left in '+L.name:''),'good');
+}
+function enqueueRedraw(){
+  const L=rdLayer();if(!L)return toast('select a layer first','warn');
+  if(!rd.shapes.length||rd.id!==L.id)return toast('draw a selection on the layer first','warn');
+  const text=$('#rprompt').value.trim();if(!text)return toast('say what the selected part should become','warn');
+  if(!(cfg.provider==='openai'?cfg.openaiKey:cfg.geminiKey).trim()){toast('add your '+cfg.provider+' api key first','warn');openSettings();return}
+  jobs.push({id:++jobN,text,kind:'redraw',layerId:L.id,provider:cfg.provider,shapes:JSON.parse(JSON.stringify(rd.shapes)),grow:+$('#rgrow').value/L.scale,keep:$('#rkeep').checked,afterId:L.id,pos:'above',status:'queued',name:'redraw · '+L.name.slice(0,14)+' · '+text.slice(0,18),ac:null});
+  rdClear();renderJobs();runQueue();
+}
+
+
+/* ---------- parent / child layers (eyes and mouth ride along with their enemy) ---------- */
+var tcache=new Map(); // parent id -> its transform the last time children were synced
+function tOf(L){return {x:L.x,y:L.y,w:L.w,h:L.h,scale:L.scale,rot:L.rot,px:L.px,py:L.py}}
+function syncChildren(){
+  if(!state.layers.some(l=>l.par))return tcache.clear();
+  const parents=new Set(state.layers.filter(l=>l.par).map(l=>l.par));
+  for(const id of [...tcache.keys()])if(!parents.has(id))tcache.delete(id);
+  for(const P of state.layers){
+    if(!parents.has(P.id))continue;
+    const o=tcache.get(P.id),n=tOf(P);
+    if(!o){tcache.set(P.id,n);continue}
+    if(o.x===n.x&&o.y===n.y&&o.scale===n.scale&&o.rot===n.rot&&o.w===n.w&&o.h===n.h&&o.px===n.px&&o.py===n.py)continue;
+    const dr=n.rot-o.rot,ds=n.scale/o.scale;
+    for(const C of state.layers){
+      if(C.par!==P.id)continue;
+      const [lx,ly]=s2l(o,C.x+C.px*C.w,C.y+C.py*C.h),[sx,sy]=l2s(n,lx,ly);
+      C.rot=((C.rot+dr+180)%360+360)%360-180;C.scale=clamp(C.scale*ds,0.001,200);C.x=sx-C.px*C.w;C.y=sy-C.py*C.h;
+    }
+    tcache.set(P.id,n);
+  }
+}
+function parTag(L){
+  if(L.par){const P=state.layers.find(p=>p.id===L.par);return P?' · ⛓ '+esc(P.name):''}
+  const n=state.layers.filter(c=>c.par===L.id).length;return n?' · ⛓ '+n+' part'+(n>1?'s':''):'';
+}
+var pickPar=null;
+function startPick(){
+  const ids=selIds().filter(i=>state.layers.some(l=>l.id===i));if(!ids.length)return toast('select the layer to attach first','warn');
+  pickPar={ids};stage.style.cursor='crosshair';
+  toast('now click the PARENT layer (on the picture or in the layer list) · Esc cancels');
+}
+function cancelPick(){pickPar=null;setCursor();toast('attach cancelled')}
+function finishPick(pid){
+  const ids=pickPar.ids;pickPar=null;setCursor();
+  const P=state.layers.find(l=>l.id===pid);if(!P)return;
+  if(P.par){const G=state.layers.find(l=>l.id===P.par);return toast('"'+P.name+'" is itself attached to "'+(G?G.name:'another layer')+'" - pick the main layer instead (one level only)','warn')}
+  const move=ids.filter(i=>i!==pid&&!state.layers.some(c=>c.par===i));
+  const blocked=ids.filter(i=>i!==pid&&state.layers.some(c=>c.par===i)).length;
+  if(!move.length)return toast(blocked?'a layer that has parts of its own cannot be attached to another (one level only)':'pick a different layer than the one you are attaching','warn');
+  edit(()=>{for(const i of move){const C=state.layers.find(l=>l.id===i);if(C)C.par=pid}});
+  toast('attached '+move.length+' layer'+(move.length>1?'s':'')+' to "'+P.name+'" · move, scale or turn it and they follow'+(blocked?' ('+blocked+' skipped: has its own parts)':''),'good');
+}
+function detachLayer(id){edit(()=>{const L=state.layers.find(l=>l.id===id);if(L)delete L.par});toast('detached','good')}
+
+/* ---------- feel: soften / crisp a layer in code (blur or unsharp mask), live preview then apply ---------- */
+var fs=null; // {id,r,orig,out}
+function feelBlur(d,w,h,rad){ // blur premultiplied rgba (Float32 arrays P[4]) with two box passes each way
+  const N=w*h,P=new Float32Array(N*4);
+  for(let i=0;i<N;i++){const a=d[i*4+3]/255;P[i*4]=d[i*4]*a;P[i*4+1]=d[i*4+1]*a;P[i*4+2]=d[i*4+2]*a;P[i*4+3]=a*255}
+  const rr=Math.max(1,Math.round(rad)),T=new Float32Array(N*4);
+  const pass=(src,dst,horiz)=>{
+    const len=horiz?w:h,lines=horiz?h:w,step=horiz?4:w*4,lstep=horiz?w*4:4,win=2*rr+1;
+    for(let l=0;l<lines;l++){const base=l*lstep;
+      for(let c=0;c<4;c++){
+        let sum=0;for(let k=-rr;k<=rr;k++)sum+=src[base+clamp(k,0,len-1)*step+c];
+        for(let i=0;i<len;i++){dst[base+i*step+c]=sum/win;sum+=src[base+Math.min(len-1,i+rr+1)*step+c]-src[base+Math.max(0,i-rr)*step+c]}
+      }}
+  };
+  for(let n=0;n<2;n++){pass(P,T,true);pass(T,P,false)}
+  return P;
+}
+function feelCompute(src,v){ // src ImageData -> ImageData
+  const {data:d,width:w,height:h}=src,N=w*h,out=new Uint8ClampedArray(d.length),big=Math.max(1,Math.max(w,h)/1000);
+  if(v<0){
+    const B=feelBlur(d,w,h,Math.abs(v)*0.8*big);
+    for(let i=0;i<N;i++){const a=B[i*4+3];out[i*4+3]=Math.round(a);if(a>0.5){out[i*4]=B[i*4]*255/a;out[i*4+1]=B[i*4+1]*255/a;out[i*4+2]=B[i*4+2]*255/a}}
+  }else{
+    const B=feelBlur(d,w,h,1.2*big),amt=v*0.45;
+    for(let i=0;i<N;i++){
+      const a=d[i*4+3];out[i*4+3]=a;if(!a)continue;
+      const ba=B[i*4+3]/255;
+      for(let c=0;c<3;c++){const bl=ba>0.004?B[i*4+c]/ba/255*255:d[i*4+c];out[i*4+c]=d[i*4+c]+amt*(d[i*4+c]-bl)}
+    }
+  }
+  return new ImageData(out,w,h);
+}
+function feelCancel(){
+  const s0=fs;if(!s0)return;fs=null;s0.r.pv=s0.orig;draw();
+}
+async function feelPreview(v){
+  const L=sel();if(!L||L.lock){return}
+  if(fs&&fs.id!==L.id)feelCancel();
+  const r=store.get(L.id);if(!r)return;
+  if(Math.abs(v)<0.01){feelCancel();return}
+  if(!fs){
+    if(r.pending)await r.pending;
+    if(r.pv.width!==r.w||r.pv.height!==r.h)await upgradePv(r);
+    if(sel()?.id!==L.id)return;
+    const w=r.pv.width,h=r.pv.height;
+    fs={id:L.id,r,orig:r.pv,src:r.pv.getContext('2d').getImageData(0,0,w,h),w,h,out:document.createElement('canvas')};fs.out.width=w;fs.out.height=h;
+  }
+  fs.v=v;fs.out.getContext('2d').putImageData(feelCompute(fs.src,v),0,0);fs.r.pv=fs.out;fs.r.tc=null;draw();
+}
+async function feelApply(){
+  const s0=fs;if(!s0){toast('move the slider first: left is softer, right is crisper','warn');return}
+  const L=state.layers.find(l=>l.id===s0.id);if(!L){feelCancel();return}
+  const r=s0.r,before=snapshot(),prevBlob=r.blob,blob=await toBlobAsync(s0.out);
+  fs=null;r.pv=s0.orig;
+  U.push({px:L.id,blob:prevBlob,meta:before});if(U.length>100)U.shift();R.length=0;
+  await applyBlob(L.id,blob);
+  toast(s0.v<0?'softer · ctrl+z undoes it':'crisper · ctrl+z undoes it','good');
+}
+LP.addEventListener('input',e=>{
+  if(!e.target.dataset||e.target.dataset.sharp!=='v')return;
+  const v=parseFloat(e.target.value)||0,n=$('[data-sharp="n"]',LP);if(n)n.textContent=(v>0?'+':'')+v;feelPreview(v);
+});
+LP.addEventListener('click',e=>{if(e.target.dataset&&e.target.dataset.sharp==='go')feelApply()});
+/* ---------- upscale: the ai redraws a layer sharper at a higher resolution ---------- */
+function enqueueUpscale(id){
+  const L=state.layers.find(l=>l.id===id);if(!L||!store.get(id))return;
+  if(!(cfg.provider==='openai'?cfg.openaiKey:cfg.geminiKey).trim()){toast('add your '+cfg.provider+' api key first','warn');openSettings();return}
+  const extra=$('#make').value.trim().slice(0,300);
+  jobs.push({id:++jobN,text:extra,kind:'upscale',layerId:id,provider:cfg.provider,afterId:id,pos:'above',status:'queued',name:'sharper · '+L.name.slice(0,22),ac:null});
+  if(extra)$('#make').value='';
+  renderJobs();runQueue();
+}
+async function runUpscale(j){
+  j.ac=new AbortController();
+  const L=state.layers.find(l=>l.id===j.layerId),r=store.get(j.layerId);if(!L||!r)throw new Error('that layer is gone');
+  if(r.pending)await r.pending;
+  const bm=await createImageBitmap(r.blob),w=bm.width,h=bm.height;
+  // how see-through is it, and what colour is it (to pick a key colour for gemini)
+  const pc=document.createElement('canvas');const pk=Math.min(1,256/Math.max(w,h));pc.width=Math.max(1,Math.round(w*pk));pc.height=Math.max(1,Math.round(h*pk));
+  const px=pc.getContext('2d',{willReadFrequently:true});px.drawImage(bm,0,0,pc.width,pc.height);
+  const pd=px.getImageData(0,0,pc.width,pc.height).data;let solid=0,cnt=0,mr=0,mg=0,mb=0;
+  for(let i=0;i<pd.length;i+=4){cnt++;if(pd[i+3]>200){solid++;mr+=pd[i];mg+=pd[i+1];mb+=pd[i+2]}}
+  const opaque=solid/cnt>0.985;
+  if(solid){mr/=solid;mg/=solid;mb/=solid}
+  const keys=[[0,255,0,'green (#00FF00)'],[255,0,255,'magenta (#FF00FF)'],[0,0,255,'blue (#0000FF)']];
+  const key=keys.map(k=>({k,d:Math.hypot(k[0]-mr,k[1]-mg,k[2]-mb)})).sort((a,b)=>b.d-a.d)[0].k;
+  // size to ask for
+  const model=(cfg.openaiModel||DEF.openaiModel).trim();
+  let aw,ah,size=null;
+  if(j.provider==='openai'){size=openaiSize(model,w/h,{small:2048,medium:2560,large:2560}[cfg.size]||2560);[aw,ah]=size.split('x').map(Number)}
+  else{const lg={small:2048,medium:2048,large:4096}[cfg.size]||2048,k0=lg/Math.max(w,h);aw=Math.round(w*k0);ah=Math.round(h*k0)}
+  const gain=Math.max(aw/w,ah/h);
+  if(gain<1.25){bm.close&&bm.close();throw new Error('this layer ('+w+'×'+h+') is already about as detailed as the ai can paint, so a redraw would not make it sharper')}
+  // picture sent: the layer on its own, see-through (openai) or on a flat key colour (gemini)
+  const sc=document.createElement('canvas');sc.width=aw;sc.height=ah;const sx=sc.getContext('2d');
+  if(!opaque&&j.provider!=='openai'){sx.fillStyle=`rgb(${key[0]},${key[1]},${key[2]})`;sx.fillRect(0,0,aw,ah)}
+  sx.imageSmoothingQuality='high';sx.drawImage(bm,0,0,aw,ah);bm.close&&bm.close();
+  const imgBlob=await toBlobAsync(sc);
+  const bgTxt=opaque?'':(j.provider==='openai'?' The background must stay fully transparent.':` The background must stay a perfectly flat, solid ${key[3]} with no shadow, gradient or texture, and none of that colour may appear on the element itself.`);
+  const prompt=`This is one layer of a 2D game scene, shown small and soft. Redraw it at a higher resolution: keep exactly the same shapes, silhouette, proportions, colours, position in the frame and art style. Make every edge clean and crisp, remove blur, blockiness and jagged edges, and add fine detail only where the style already has it. Do not add, remove, move or restyle anything.${bgTxt}${j.text?' Extra instruction: '+j.text:''} No text, no frame, no border.`;
+  let res;
+  if(j.provider==='openai'){
+    const fd=new FormData();fd.append('model',model);fd.append('prompt',prompt);fd.append('image[]',imgBlob,'layer.png');fd.append('size',size);fd.append('quality',cfg.quality);fd.append('output_format','png');fd.append('n','1');
+    if(!opaque)fd.append('background','transparent');
+    const rs=await fetchApi(cfg.openaiBase.replace(/\/+$/,'')+'/v1/images/edits',{method:'POST',headers:{Authorization:'Bearer '+cfg.openaiKey.trim()},body:fd,signal:j.ac.signal});
+    if(!rs.ok)throw new Error(await apiErr(rs));
+    res=findImage(await rs.json());
+  }else{
+    const a=aw/ah,o={'1:1':1,'3:2':1.5,'2:3':2/3,'3:4':.75,'4:3':4/3,'4:5':.8,'5:4':1.25,'9:16':9/16,'16:9':16/9,'21:9':21/9};
+    res=await geminiRaw(j,prompt,await blobB64(imgBlob),Object.keys(o).reduce((b,q)=>Math.abs(o[q]-a)<Math.abs(o[b]-a)?q:b,'1:1'),aw>2600||ah>2600?'4K':'2K');
+  }
+  if(!res)throw new Error('the model answered without a picture');
+  if(j.status==='cancelled')return;
+  // new picture at the model's size (aspect forced back to the layer's own shape)
+  const rb=await createImageBitmap(b64Blob(res.data,res.mime||'image/png'));
+  const k=Math.max(rb.width/w,rb.height/h),nw=Math.round(w*k),nh=Math.round(h*k);
+  const rc=document.createElement('canvas');rc.width=nw;rc.height=nh;const rx=rc.getContext('2d',{willReadFrequently:true});rx.imageSmoothingQuality='high';rx.drawImage(rb,0,0,nw,nh);rb.close&&rb.close();
+  const out=rx.getImageData(0,0,nw,nh),od=out.data;
+  let note='';
+  if(!opaque){
+    // original silhouette at the new size
+    const o2=document.createElement('canvas');o2.width=nw;o2.height=nh;const ox=o2.getContext('2d',{willReadFrequently:true});ox.imageSmoothingQuality='high';
+    const ob=await createImageBitmap(r.blob);ox.drawImage(ob,0,0,nw,nh);ob.close&&ob.close();
+    const a0=ox.getImageData(0,0,nw,nh).data;
+    if(j.provider!=='openai'){ // key the flat colour out, softly
+      for(let i=0;i<od.length;i+=4){const d=Math.hypot(od[i]-key[0],od[i+1]-key[1],od[i+2]-key[2])/441,t=Math.min(1,Math.max(0,(d-.30)/.30));const al=t*t*(3-2*t);od[i+3]=Math.round(255*al);if(al>0&&al<1){for(let c=0;c<3;c++)od[i+c]=Math.max(0,Math.min(255,Math.round((od[i+c]-(1-al)*key[c])/al)))}}
+    }
+    let inter=0,uni=0;for(let i=3;i<od.length;i+=4){const A=od[i]>127,B=a0[i]>127;if(A&&B)inter++;if(A||B)uni++}
+    const iou=uni?inter/uni:0;
+    if(iou<.75){for(let i=3;i<od.length;i+=4)od[i]=a0[i];note=' · the ai changed the outline, so the original outline was kept'}
+  }else for(let i=3;i<od.length;i+=4)od[i]=255;
+  rx.putImageData(out,0,0);
+  const blob=await toBlobAsync(rc);rc.width=rc.height=0;
+  if(!state.layers.some(l=>l.id===j.layerId))return;
+  const Lc=state.layers.find(l=>l.id===j.layerId),before=snapshot(),prevBlob=r.blob;
+  // keep the pivot where it is on the scene and the on-screen size the same
+  const [pvx,pvy]=[Lc.x+Lc.px*Lc.w,Lc.y+Lc.py*Lc.h],f=nw/Lc.w;
+  Lc.w=nw;Lc.h=nh;Lc.scale=Lc.scale/f;Lc.x=pvx-Lc.px*nw;Lc.y=pvy-Lc.py*nh;
+  U.push({px:j.layerId,blob:prevBlob,meta:before});if(U.length>100)U.shift();R.length=0;
+  await applyBlob(j.layerId,blob);
+  toast('"'+Lc.name+'" redrawn sharper: '+w+'×'+h+' → '+nw+'×'+nh+note+' · ctrl+z undoes it','good');
+}
+async function runRedraw(j){
+  j.ac=new AbortController();
+  const L=state.layers.find(l=>l.id===j.layerId),r=store.get(j.layerId);if(!L||!r)throw new Error('that layer is gone');
+  if(r.pending)await r.pending;
+  const bm=await createImageBitmap(r.blob),w=bm.width,h=bm.height;
+  const oc=document.createElement('canvas');oc.width=w;oc.height=h;const ox=oc.getContext('2d',{willReadFrequently:true});ox.drawImage(bm,0,0);bm.close&&bm.close();
+  const orig=ox.getImageData(0,0,w,h),od=orig.data;
+  // selection mask at layer resolution
+  const mc=document.createElement('canvas');mc.width=w;mc.height=h;const mx=mc.getContext('2d',{willReadFrequently:true});rdPaint(mx,j.shapes,j.grow);
+  const md=mx.getImageData(0,0,w,h).data;
+  let x0=w,y0=h,x1=-1,y1=-1,cnt=0;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(md[(y*w+x)*4+3]>127){cnt++;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+  if(!cnt)throw new Error('the selection is outside the layer');
+  // crop: selection box plus some surroundings so the ai can see the style
+  let bw=x1-x0+1,bh=y1-y0+1;const pad=Math.max(48,Math.round(Math.max(bw,bh)*.35));
+  let cx0=Math.max(0,x0-pad),cy0=Math.max(0,y0-pad),cx1=Math.min(w,x1+1+pad),cy1=Math.min(h,y1+1+pad);
+  let cw=cx1-cx0,ch=cy1-cy0;
+  {const need=Math.round(Math.max(cw,ch)/3),ex=(lo,hi,mx)=>{const e=need-(hi-lo);if(e<=0)return[lo,hi];const a=Math.min(lo,Math.floor(e/2));lo-=a;hi=Math.min(mx,hi+e-a);if(hi-lo<need)lo=Math.max(0,lo-(need-(hi-lo)));return[lo,hi]};
+   [cx0,cx1]=ex(cx0,cx1,w);[cy0,cy1]=ex(cy0,cy1,h)}
+  cw=cx1-cx0;ch=cy1-cy0;
+  const model=(cfg.openaiModel||DEF.openaiModel).trim();
+  const long={small:1024,medium:1536,large:2048}[cfg.size]||1536,k=Math.min(2,long/Math.max(cw,ch));
+  let aw=Math.max(16,Math.round(cw*k)),ah=Math.max(16,Math.round(ch*k)),size=null;
+  if(j.provider==='openai'){size=openaiSize(model,cw/ch,long);[aw,ah]=size.split('x').map(Number)}
+  // picture sent: the crop over flat grey (so see-through areas are not black); gemini gets the selection painted magenta
+  const sc=document.createElement('canvas');sc.width=aw;sc.height=ah;const sx=sc.getContext('2d',{willReadFrequently:true});
+  sx.fillStyle='#808080';sx.fillRect(0,0,aw,ah);sx.imageSmoothingQuality='high';sx.drawImage(oc,cx0,cy0,cw,ch,0,0,aw,ah);
+  const mk=document.createElement('canvas');mk.width=aw;mk.height=ah;const mkx=mk.getContext('2d',{willReadFrequently:true});mkx.drawImage(mc,cx0,cy0,cw,ch,0,0,aw,ah);
+  const mkd=mkx.getImageData(0,0,aw,ah).data;
+  if(j.provider!=='openai'){const sd=sx.getImageData(0,0,aw,ah);for(let p=0;p<aw*ah;p++)if(mkd[p*4+3]>127){sd.data[p*4]=255;sd.data[p*4+1]=0;sd.data[p*4+2]=255}sx.putImageData(sd,0,0)}
+  const imgBlob=await toBlobAsync(sc);
+  const mo=new Uint8ClampedArray(aw*ah*4);for(let p=0;p<aw*ah;p++)mo[p*4+3]=mkd[p*4+3]>127?0:255;
+  const mc2=document.createElement('canvas');mc2.width=aw;mc2.height=ah;mc2.getContext('2d').putImageData(new ImageData(mo,aw,ah),0,0);
+  const what=j.text.replace(/\s+/g,' ').slice(0,400);
+  const prompt=j.provider==='openai'
+    ?`This is a crop of one layer of a 2D game scene (flat grey means empty). Repaint ONLY the masked (transparent) area so that it becomes: ${what}. Match the art style, colours, line work, shading and lighting of the rest of the picture exactly, and blend seamlessly with the surroundings. Keep everything outside the mask exactly as it is. No text, no frame, no border.`
+    :`This is a crop of one layer of a 2D game scene (flat grey means empty). Replace the flat magenta (#FF00FF) area so that it becomes: ${what}. Match the art style, colours, line work, shading and lighting of the rest of the picture exactly, and blend seamlessly. No magenta may remain. Keep everything else exactly as it is. No text, no frame, no border.`;
+  let res;
+  if(j.provider==='openai'){
+    const fd=new FormData();fd.append('model',model);fd.append('prompt',prompt);fd.append('image[]',imgBlob,'layer.png');fd.append('mask',await toBlobAsync(mc2),'mask.png');
+    fd.append('size',size);fd.append('quality',cfg.quality);fd.append('output_format','png');fd.append('n','1');
+    const rs=await fetchApi(cfg.openaiBase.replace(/\/+$/,'')+'/v1/images/edits',{method:'POST',headers:{Authorization:'Bearer '+cfg.openaiKey.trim()},body:fd,signal:j.ac.signal});
+    if(!rs.ok)throw new Error(await apiErr(rs));
+    res=findImage(await rs.json());
+  }else{
+    const a=aw/ah,o={'1:1':1,'3:2':1.5,'2:3':2/3,'3:4':.75,'4:3':4/3,'4:5':.8,'5:4':1.25,'9:16':9/16,'16:9':16/9,'21:9':21/9};
+    res=await geminiRaw(j,prompt,await blobB64(imgBlob),Object.keys(o).reduce((b,q)=>Math.abs(o[q]-a)<Math.abs(o[b]-a)?q:b,'1:1'));
+  }
+  if(!res)throw new Error('the model answered without a picture');
+  if(j.status==='cancelled')return;
+  // blend the new paint in through a softly feathered selection; nothing outside it changes
+  const rb=await createImageBitmap(b64Blob(res.data,res.mime||'image/png'));
+  const rc=document.createElement('canvas');rc.width=cw;rc.height=ch;const rx=rc.getContext('2d',{willReadFrequently:true});rx.imageSmoothingQuality='high';rx.drawImage(rb,0,0,cw,ch);rb.close&&rb.close();
+  const rda=rx.getImageData(0,0,cw,ch).data;
+  const fc=document.createElement('canvas');fc.width=cw;fc.height=ch;const fx=fc.getContext('2d',{willReadFrequently:true});
+  try{fx.filter='blur(1.5px)'}catch(_){}fx.drawImage(mc,cx0,cy0,cw,ch,0,0,cw,ch);fx.filter='none';
+  const fd2=fx.getImageData(0,0,cw,ch).data;
+  for(let y=0;y<ch;y++)for(let x=0;x<cw;x++){
+    const q=(y*cw+x)*4,i=((y+cy0)*w+(x+cx0))*4,m=fd2[q+3]/255;if(m<=0)continue;
+    const a0=od[i+3];
+    if(j.keep&&a0<8)continue;
+    if(rda[q+3]<128)continue;
+    const mm=a0<8?1:m;
+    od[i]=Math.round(od[i]*(1-mm)+rda[q]*mm);od[i+1]=Math.round(od[i+1]*(1-mm)+rda[q+1]*mm);od[i+2]=Math.round(od[i+2]*(1-mm)+rda[q+2]*mm);
+    if(!j.keep)od[i+3]=Math.round(a0+(255-a0)*m);
+  }
+  ox.putImageData(orig,0,0);
+  const blob=await toBlobAsync(oc);
+  if(!state.layers.some(l=>l.id===j.layerId))return;
+  pushUndoPx(j.layerId,r.blob);await applyBlob(j.layerId,blob);
+  toast('redrew part of '+L.name+' · ctrl+z undoes it','good');
+}
+$('#rmode').addEventListener('change',e=>{rd.mode=e.target.value;$('#rszl').hidden=rd.mode!=='brush';rd.hover=null;draw()});
+$('#rsz').addEventListener('input',e=>{$('#rszv').textContent=e.target.value+'px';draw()});
+$('#rgrow').addEventListener('input',e=>{$('#rgv').textContent=e.target.value+'px'});
+$('#rgo').onclick=enqueueRedraw;$('#rcut').onclick=rdCut;$('#rclear').onclick=rdClear;
+$('#rprompt').addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Enter'){e.preventDefault();enqueueRedraw()}});
+
+/* ---------- brush / eraser (paints at full resolution into the selected layer) ---------- */
+let stroke=null,hover=null;
+function beginStroke(e,p){
+  const L=sel();
+  if(!L){toast('select a layer to paint on (or press the new paint layer button)','warn');return}
+  if(L.lock||!L.vis){toast(L.lock?'that layer is locked':'that layer is hidden','warn');return}
+  const r=store.get(L.id);if(!r)return;
+  const s=stroke={L,r,pid:e.pointerId,erase:state.tool==='eraser',last:null,queue:[],ready:false,pen:e.pointerType==='pen'};
+  s.readyP=(async()=>{
+    if(r.pending)await r.pending;
+    if(r.pv.width!==r.w||r.pv.height!==r.h)await upgradePv(r);
+    s.prevBlob=r.blob;s.ready=true;s.queue.forEach(q=>dab(s,q.x,q.y,q.p));s.queue=[];draw();
+  })();
+  addPoint(s,p,e.pressure);
+}
+function addPoint(s,p,pr){
+  const sp=toScene(p),[x,y]=s2l(s.L,sp.x,sp.y);
+  if(s.ready)dab(s,x,y,pr);else s.queue.push({x,y,p:pr});
+}
+function moveStroke(e){
+  const s=stroke;const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];
+  for(const ev of (evs.length?evs:[e]))addPoint(s,lp(ev),ev.pressure);
+  draw();
+}
+function dab(s,x,y,pr){
+  s.r.ver=(s.r.ver|0)+1;const c=s.r.pv.getContext('2d');
+  c.globalCompositeOperation=s.erase?'destination-out':'source-over';
+  c.fillStyle=c.strokeStyle=brush.color;c.lineCap=c.lineJoin='round';
+  const f=s.pen?0.25+0.75*(pr||0.5):1,w=Math.max(0.5,brush.size/s.L.scale*f);
+  if(!s.last){c.beginPath();c.arc(x,y,w/2,0,Math.PI*2);c.fill()}
+  else{c.lineWidth=w;c.beginPath();c.moveTo(s.last.x,s.last.y);c.lineTo(x,y);c.stroke()}
+  s.last={x,y};c.globalCompositeOperation='source-over';
+}
+function finishStroke(){
+  const s=stroke;stroke=null;if(!s)return;
+  s.readyP.then(()=>{
+    const r=s.r,id=s.L.id;pushUndoPx(id,s.prevBlob);
+    r.pending=toBlobAsync(r.pv).then(b=>{r.blob=b;savedBlobs.delete(id);r.pending=null;saveSoon()});
+    Object.assign(r,maskFrom(r.pv));lastStruct='';changed();
+  });
+}
+$('#bsize').addEventListener('input',e=>{brush.size=+e.target.value;$('#bsz').textContent=brush.size+'px';draw()});
+$('#bcol').addEventListener('input',e=>{brush.color=e.target.value});
+async function addBlank(){
+  const c=document.createElement('canvas');c.width=state.W;c.height=state.H;
+  const blob=await toBlobAsync(c),id=newId(),m=maskFrom(c);
+  store.set(id,{blob,pv:c,mask:m.mask,mw:m.mw,mh:m.mh,w:state.W,h:state.H});
+  const n=state.layers.filter(l=>/^paint \d+$/.test(l.name)).length+1,i=state.layers.findIndex(l=>l.id===state.sel);
+  edit(()=>{state.layers.splice(i<0?state.layers.length:i+1,0,{id,name:'paint '+n,x:0,y:0,w:state.W,h:state.H,scale:1,rot:0,px:.5,py:.5,op:1,vis:true,lock:false,ai:false});state.sel=id});
+  setTool('brush');
+}
+$('#b-blank').onclick=addBlank;
+stage.addEventListener('wheel',e=>{
+  e.preventDefault();const p=lp(e);let dy=e.deltaY;if(e.deltaMode===1)dy*=16;
+  zoomAt(Math.exp(-dy*(e.ctrlKey?0.01:0.0015)),p.x,p.y);
+},{passive:false});
+stage.addEventListener('contextmenu',e=>e.preventDefault());
+stage.addEventListener('dblclick',e=>{if(state.tool==='move'&&!hitLayer(toScene(lp(e)).x,toScene(lp(e)).y)&&!e.target.closest('#zoombar'))fit()});
+
+function setTool(t){if(sess&&t!=='wand')cancelWand();if(cs&&t!=='cut')cancelCut();if(rd&&t!=='redraw'){rd.shapes=[];rd.cur=null;rd.hover=null}state.tool=t;$('#rbar').classList.toggle('show',t==='redraw');$('#cbar').classList.toggle('show',t==='cut');$('#wbar').classList.toggle('show',t==='wand');$('#tbar').classList.toggle('show',t==='brush'||t==='eraser');$('#sbar').classList.toggle('show',t==='shape');sdrag=null;$('#tbar-t').textContent=t==='eraser'?'eraser':'brush';$$('.tool[data-tool]').forEach(b=>b.classList.toggle('on',b.dataset.tool===t));setCursor();draw();if(t==='wand')enterWand()}
+$$('.tool[data-tool]').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
+$('#z-in').onclick=()=>zoomAt(1.25,cw/2,ch/2);
+$('#z-out').onclick=()=>zoomAt(1/1.25,cw/2,ch/2);
+$('#z-fit').onclick=()=>fit();
+$('#z-100').onclick=()=>zoomAt(1/view.z,cw/2,ch/2);
+
+/* first-use touch hint */
+function firstTouchHint(){
+  try{if(localStorage.getItem('lf-hint'))return}catch(_){}
+  $('#hint').classList.add('show');
+}
+$('#hint-ok').onclick=()=>{$('#hint').classList.remove('show');try{localStorage.setItem('lf-hint','1')}catch(_){}};
+
+/* ---------- keyboard ---------- */
+const typing=e=>e.target.matches&&e.target.matches('input:not([type=range]),textarea,select');
+addEventListener('keydown',e=>{
+  const mod=e.ctrlKey||e.metaKey,k=e.key.toLowerCase();
+  if(mod&&k==='z'){e.preventDefault();e.shiftKey?redo():undo();return}
+  if(mod&&k==='y'){e.preventDefault();redo();return}
+  if(mod&&k==='s'){e.preventDefault();saveZip();return}
+  if(mod&&k==='o'){e.preventDefault();$('#file').click();return}
+  if(mod&&k==='0'){e.preventDefault();fit();return}
+  if(mod&&k==='e'&&!typing(e)){e.preventDefault();const ids=selIds();ids.length>=2?mergeLayers(ids):state.sel&&mergeDown(state.sel);return}
+  if(typing(e)||$('#modal').classList.contains('show'))return;
+  if(e.key===' '){e.preventDefault();if(!spaceDown){spaceDown=true;setCursor()}return}
+  if(mod)return;
+  const L=sel();
+  if(k==='v')setTool('move');else if(k==='h')setTool('hand');else if(k==='z')setTool('zoom');else if(k==='b')setTool('brush');else if(k==='e')setTool('eraser');else if(k==='w')setTool('wand');else if(k==='c')setTool('cut');else if(k==='r')setTool('redraw');else if(k==='s')setTool('shape');
+  else if(pickPar&&e.key==='Escape')cancelPick()
+  else if(gb&&e.key==='Escape'){gb=null;gbBtn();draw()}
+  else if(state.tool==='redraw'&&e.key==='Escape'){rd&&rd.shapes.length?rdClear():setTool('move')}
+  else if(state.tool==='cut'&&e.key==='Enter'){e.preventDefault();applyCut()}
+  else if(state.tool==='cut'&&e.key==='Escape'){cs&&cs.seeds.length?cutClear():setTool('move')}
+  else if(state.tool==='wand'&&e.key==='Enter'){e.preventDefault();applyWand()}
+  else if(state.tool==='wand'&&e.key==='Escape'){cancelWand();setTool('move')}
+  else if((state.tool==='brush'||state.tool==='eraser')&&(e.key==='['||e.key===']')){brush.size=clamp(Math.round(brush.size*(e.key===']'?1.25:0.8)+(e.key===']'?1:-1)),1,300);$('#bsize').value=brush.size;$('#bsz').textContent=brush.size+'px';draw()}
+  else if((e.key==='Delete'||e.key==='Backspace')&&L){e.preventDefault();removeLayer(L.id)}
+  else if(L&&!L.lock&&e.key.startsWith('Arrow')){
+    e.preventDefault();const s=e.shiftKey?10:1;
+    edit(()=>{if(e.key==='ArrowLeft')L.x-=s;if(e.key==='ArrowRight')L.x+=s;if(e.key==='ArrowUp')L.y-=s;if(e.key==='ArrowDown')L.y+=s},'nudge'+L.id);
+  }else if(e.key==='['&&L)moveLayer(L.id,-1);else if(e.key===']'&&L)moveLayer(L.id,1);
+});
+addEventListener('keyup',e=>{if(e.key===' '){spaceDown=false;setCursor()}});
+addEventListener('blur',()=>{spaceDown=false;setCursor()});
+
+/* ---------- importing images ---------- */
+async function makeRec(blob,{trim}){
+  const full=await createImageBitmap(blob);
+  const W0=full.width,H0=full.height;
+  const cv0=document.createElement('canvas');cv0.width=W0;cv0.height=H0;
+  const c0=cv0.getContext('2d',{willReadFrequently:true});c0.drawImage(full,0,0);full.close&&full.close();
+  let minx=0,miny=0,maxx=W0-1,maxy=H0-1;
+  if(trim){
+    const d=c0.getImageData(0,0,W0,H0).data;minx=W0;miny=H0;maxx=-1;maxy=-1;
+    for(let y=0;y<H0;y++){const row=y*W0*4+3;for(let x=0;x<W0;x++){if(d[row+x*4]>0){if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y}}}
+    if(maxx<0){cv0.width=cv0.height=0;return null}
+  }
+  const bw=maxx-minx+1,bh=maxy-miny+1;
+  let out=blob;
+  if(bw!==W0||bh!==H0){
+    const c1=document.createElement('canvas');c1.width=bw;c1.height=bh;c1.getContext('2d').drawImage(cv0,minx,miny,bw,bh,0,0,bw,bh);
+    out=await new Promise(r=>c1.toBlob(r,'image/png'));c1.width=c1.height=0;
+  }
+  const k=Math.min(1,2048/Math.max(bw,bh)),pw=Math.max(1,Math.round(bw*k)),ph=Math.max(1,Math.round(bh*k));
+  const pv=document.createElement('canvas');pv.width=pw;pv.height=ph;
+  const pc=pv.getContext('2d');pc.imageSmoothingQuality='high';pc.drawImage(cv0,minx,miny,bw,bh,0,0,pw,ph);
+  cv0.width=cv0.height=0;
+  const m=maskFrom(pv);
+  return {rec:{blob:out,pv,mask:m.mask,mw:m.mw,mh:m.mh,w:bw,h:bh},ox:minx,oy:miny,W0,H0};
+}
+function maskFrom(pv){
+  const mk=Math.min(1,512/Math.max(pv.width,pv.height)),mw=Math.max(1,Math.round(pv.width*mk)),mh=Math.max(1,Math.round(pv.height*mk));
+  const mc=document.createElement('canvas');mc.width=mw;mc.height=mh;const mx=mc.getContext('2d',{willReadFrequently:true});mx.drawImage(pv,0,0,mw,mh);
+  const md=mx.getImageData(0,0,mw,mh).data,mask=new Uint8Array(mw*mh);for(let i=0;i<mask.length;i++)mask[i]=md[i*4+3];
+  return {mask,mw,mh};
+}
+const toBlobAsync=c=>new Promise(r=>c.toBlob(r,'image/png'));
+const flushPending=()=>Promise.all([...store.values()].map(r=>r.pending).filter(Boolean));
+async function upgradePv(r){ // make the edit surface full resolution
+  const bm=await createImageBitmap(r.blob),c=document.createElement('canvas');c.width=r.w;c.height=r.h;
+  c.getContext('2d').drawImage(bm,0,0);bm.close&&bm.close();r.pv=c;
+}
+const baseName=f=>f.replace(/^.*[\\/]/,'').replace(/\.[a-z0-9]+$/i,'');
+const niceName=f=>baseName(f).replace(/^\d+[-_ ]+/,'').replace(/[-_]+/g,' ').trim()||'layer';
+async function addImage(blob,name){
+  const r=await makeRec(blob,{trim:true});if(!r){toast(name+': fully transparent, skipped','warn');return null}
+  const id=newId();store.set(id,r.rec);
+  const sceneSized=r.W0>=state.W||r.H0>=state.H;
+  const x=sceneSized?r.ox:Math.round((state.W-r.W0)/2)+r.ox,y=sceneSized?r.oy:Math.round((state.H-r.H0)/2)+r.oy;
+  return {id,name:niceName(name),x,y,w:r.rec.w,h:r.rec.h,scale:1,rot:0,px:.5,py:.5,op:1,vis:true,lock:false,ai:false};
+}
+async function importFiles(files){
+  files=[...files];if(!files.length)return;
+  const zips=files.filter(f=>/\.zip$/i.test(f.name)),imgs=files.filter(f=>!/\.zip$/i.test(f.name)&&(f.type.startsWith('image/')||/\.(png|webp|jpe?g)$/i.test(f.name)));
+  if(zips.length){await openZip(zips[0]);if(!imgs.length)return}
+  imgs.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+  if(!imgs.length){if(!zips.length)toast('drop png images or a scene zip','warn');return}
+  setBusy(1);const added=[];
+  try{
+    for(const f of imgs){
+      try{const L=await addImage(f,f.name);if(L)added.push(L)}catch(err){console.error(err);toast(f.name+': could not read this image','err')}
+    }
+    if(added.length){pushUndo();lastKey=null;state.layers.push(...added);state.sel=added[added.length-1].id;changed();toast(`added ${added.length} layer${added.length===1?'':'s'}`,'good')}
+  }finally{setBusy(-1)}
+}
+$('#file').addEventListener('change',e=>{importFiles(e.target.files);e.target.value=''});
+$('#b-import').onclick=()=>$('#file').click();
+$('#b-add').onclick=()=>$('#file').click();
+let dragDepth=0;
+addEventListener('dragenter',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files')){dragDepth++;$('#drop').classList.add('show')}});
+addEventListener('dragleave',()=>{dragDepth=Math.max(0,dragDepth-1);if(!dragDepth)$('#drop').classList.remove('show')});
+addEventListener('dragover',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files'))e.preventDefault()});
+addEventListener('drop',e=>{dragDepth=0;$('#drop').classList.remove('show');if(e.dataTransfer&&e.dataTransfer.files.length){e.preventDefault();importFiles(e.dataTransfer.files)}});
+
+/* ---------- zip (stored) ---------- */
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(u8){let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=CRC[(c^u8[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
+function zipBuild(entries){
+  const enc=new TextEncoder(),parts=[],cd=[];let off=0;
+  const d=new Date(),dt=((d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1))&0xFFFF,dd=(((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate())&0xFFFF;
+  for(const e of entries){
+    const nm=enc.encode(e.name),crc=crc32(e.data),sz=e.data.length;
+    const lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true);lh.setUint16(4,20,true);lh.setUint16(6,0x0800,true);lh.setUint16(8,0,true);lh.setUint16(10,dt,true);lh.setUint16(12,dd,true);
+    lh.setUint32(14,crc,true);lh.setUint32(18,sz,true);lh.setUint32(22,sz,true);lh.setUint16(26,nm.length,true);lh.setUint16(28,0,true);
+    parts.push(lh.buffer,nm,e.data);
+    const ch=new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true);ch.setUint16(4,20,true);ch.setUint16(6,20,true);ch.setUint16(8,0x0800,true);ch.setUint16(10,0,true);ch.setUint16(12,dt,true);ch.setUint16(14,dd,true);
+    ch.setUint32(16,crc,true);ch.setUint32(20,sz,true);ch.setUint32(24,sz,true);ch.setUint16(28,nm.length,true);ch.setUint32(42,off,true);
+    cd.push(ch.buffer,nm);off+=30+nm.length+sz;
+  }
+  let cdSize=0;cd.forEach(p=>cdSize+=p.byteLength||p.length);
+  const end=new DataView(new ArrayBuffer(22));
+  end.setUint32(0,0x06054b50,true);end.setUint16(8,entries.length,true);end.setUint16(10,entries.length,true);end.setUint32(12,cdSize,true);end.setUint32(16,off,true);
+  return new Blob([...parts,...cd,end.buffer],{type:'application/zip'});
+}
+async function zipRead(file){
+  const buf=await file.arrayBuffer(),dv=new DataView(buf),u8=new Uint8Array(buf),dec=new TextDecoder();
+  let e=-1;for(let i=buf.byteLength-22;i>=Math.max(0,buf.byteLength-65600);i--){if(dv.getUint32(i,true)===0x06054b50){e=i;break}}
+  if(e<0)throw new Error('not a zip file');
+  const n=dv.getUint16(e+10,true);let p=dv.getUint32(e+16,true);const out=new Map();
+  for(let i=0;i<n;i++){
+    if(dv.getUint32(p,true)!==0x02014b50)break;
+    const method=dv.getUint16(p+10,true),csz=dv.getUint32(p+20,true),nl=dv.getUint16(p+28,true),el=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true),lo=dv.getUint32(p+42,true);
+    const name=dec.decode(u8.subarray(p+46,p+46+nl));p+=46+nl+el+cl;
+    if(name.endsWith('/'))continue;
+    const lnl=dv.getUint16(lo+26,true),lel=dv.getUint16(lo+28,true),start=lo+30+lnl+lel,comp=u8.subarray(start,start+csz);
+    let data;
+    if(method===0)data=comp;
+    else if(method===8){
+      if(typeof DecompressionStream==='undefined')throw new Error('this browser cannot open compressed zips');
+      data=new Uint8Array(await new Response(new Blob([comp]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+    }else throw new Error('unsupported zip compression');
+    out.set(name,data);
+  }
+  return out;
+}
+
+/* ---------- scene file ---------- */
+const fileFor=(l,i)=>String(i+1).padStart(2,'0')+'-'+slug(l.name)+'.png';
+function parentInfo(l,list){const j=l.par?list.findIndex(q=>q.id===l.par):-1;return j<0?{}:{parent:fileFor(list[j],j),parentName:list[j].name}}
+function sceneJSON(list=state.layers,skipped){
+  return {format:'layerforge-scene',version:1,name:state.name,width:state.W,height:state.H,
+    notes:'layers are listed bottom to top (z = stacking order). parent (optional) = the file of the layer this one is attached to (eyes and mouth on an enemy, say): when the parent moves, scales or turns, this layer should follow it; the x / y / scale / rotation given here are its resting pose. tint (optional) recolours a layer in code: mode multiply = canvas multiply blend of color over the picture (keeps shading and outlines), mode color = canvas color blend (keeps brightness, swaps hue); amount 0-1 mixes the tinted picture over the original. x,y = top-left of the unscaled layer in scene pixels. scale (1 = 100%) and rotation (degrees, clockwise) turn the layer around pivot (0-1 across the layer, can fall outside it).',
+    ...(skipped?{skipped}:{}),
+    layers:list.map((l,i)=>({...parentInfo(l,list),name:l.name,file:fileFor(l,i),z:i,x:l.x,y:l.y,w:l.w,h:l.h,scale:l.scale,rotation:l.rot,pivot:{x:l.px,y:l.py},opacity:l.op,visible:l.vis,locked:l.lock,ai:l.ai,...(l.tint?{tint:{color:l.tint,mode:l.tm||'multiply',amount:l.ta==null?1:l.ta}}:{}),...(l.shape&&shapeOk(l)?{shape:shapePublic(l.shape)}:{})}))};
+}
+function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},5000)}
+const isEmptyLayer=l=>{const r=store.get(l.id);return !r||!r.mask||!r.mask.some(v=>v>0)};
+async function saveZip(game){
+  if(!state.layers.length)return toast('nothing to save yet','warn');
+  await flushPending();setBusy(1);
+  try{
+    let list=state.layers,skipped;
+    if(game===true){
+      const out=state.layers.filter(l=>!l.vis||isEmptyLayer(l));skipped=out.map(l=>l.name+(l.vis?' (empty)':' (hidden)'));
+      list=state.layers.filter(l=>l.vis&&!isEmptyLayer(l));
+      if(!list.length)return toast('nothing visible to export','warn');
+    }else game=false;
+    const enc=new TextEncoder(),entries=[{name:'scene.json',data:enc.encode(JSON.stringify(sceneJSON(list,skipped&&skipped.length?skipped:undefined),null,2))}];
+    for(let i=0;i<list.length;i++){const l=list[i];entries.push({name:fileFor(l,i),data:new Uint8Array(await store.get(l.id).blob.arrayBuffer())})}
+    const fname=slug(state.name)+(game?'-game':'')+'.zip',z=zipBuild(entries);dl(z,fname);
+    toast(`saved ${fname} · ${list.length} layer${list.length===1?'':'s'} · ${fmtSize(z.size)}`+(skipped&&skipped.length?` · left out ${skipped.length}: ${skipped.join(', ')}`:''),'good');
+  }catch(err){console.error(err);toast('save failed: '+err.message,'err')}finally{setBusy(-1)}
+}
+async function openZip(file){
+  if(state.layers.length&&!confirm('replace the current scene with this zip? (the current scene stays in autosave until you change something)'))return;
+  setBusy(1);
+  try{
+    const files=await zipRead(file);
+    const key=[...files.keys()].find(k=>/(^|\/)scene\.json$/i.test(k))||[...files.keys()].find(k=>/(^|\/)layers\.json$/i.test(k));
+    const pngs=[...files.keys()].filter(k=>/\.png$/i.test(k)).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+    const mk=u8=>new Blob([u8],{type:'image/png'});
+    resetScene(true);
+    if(key){
+      const sc=JSON.parse(new TextDecoder().decode(files.get(key)));
+      state.name=sc.name||baseName(file.name);state.W=sc.width||3840;state.H=sc.height||2160;
+      const list=[...(sc.layers||[])].sort((a,b)=>(a.z??0)-(b.z??0));
+      const byFile=new Map(),wantPar=[];
+      for(const m of list){
+        const fk=[...files.keys()].find(k=>k.replace(/^.*\//,'')===String(m.file||'').replace(/^.*\//,''));
+        if(!fk){toast('missing file for layer '+m.name,'warn');continue}
+        const r=await makeRec(mk(files.get(fk)),{trim:false});if(!r)continue;const id=newId();store.set(id,r.rec);
+        state.layers.push({id,name:m.name||niceName(fk),x:+m.x||0,y:+m.y||0,w:r.rec.w,h:r.rec.h,scale:m.scale??1,rot:m.rotation??0,px:m.pivot?.x??.5,py:m.pivot?.y??.5,op:m.opacity??1,vis:m.visible!==false,lock:!!m.locked,ai:!!m.ai,...(m.tint&&m.tint.color?{tint:String(m.tint.color),tm:m.tint.mode==='color'?'color':'multiply',ta:m.tint.amount==null?1:+m.tint.amount}:{}),...(m.shape&&m.shape.type?{shape:shapeClean(m.shape,r.rec.blob.size)}:{})});
+        byFile.set(String(m.file||'').replace(/^.*\//,''),id);if(m.parent)wantPar.push([id,String(m.parent).replace(/^.*\//,'')]);
+      }
+      for(const [cid,pf] of wantPar){const pid=byFile.get(pf);const C=state.layers.find(l=>l.id===cid);if(C&&pid&&pid!==cid)C.par=pid}
+    }else{
+      state.name=baseName(file.name);
+      for(const k of pngs){const L=await addImage(mk(files.get(k)),k);if(L)state.layers.push(L)}
+    }
+    state.sel=state.layers.length?state.layers[state.layers.length-1].id:null;
+    $('#sname').value=state.name;fit(true);changed();toast(`opened ${state.layers.length} layer${state.layers.length===1?'':'s'}`,'good');
+  }catch(err){console.error(err);toast('could not open zip: '+err.message,'err')}finally{setBusy(-1)}
+}
+function resetScene(keepSize){
+  state.layers=[];state.sel=null;tcache.clear();store.clear();U.length=0;R.length=0;lastStruct='';savedBlobs.clear();
+  if(!keepSize){state.W=3840;state.H=2160}
+}
+
+/* ---------- export modal ---------- */
+const modal=$('#modal');
+function openModal(html,onMount){modal.innerHTML=`<div class="card">${html}</div>`;modal.classList.add('show');onMount&&onMount(modal)}
+function closeModal(){modal.classList.remove('show');modal.innerHTML=''}
+modal.addEventListener('mousedown',e=>{if(e.target===modal)closeModal()});
+addEventListener('keydown',e=>{if(e.key==='Escape'&&modal.classList.contains('show'))closeModal()});
+function exportModal(){
+  if(!state.layers.length)return toast('add some layers first','warn');
+  let mode='zip';const L0=sel()||state.layers[state.layers.length-1];
+  const total=state.layers.reduce((s,l)=>s+store.get(l.id).blob.size,0);
+  openModal(`<h2><span class="d">$</span> export · ${esc(state.name)}</h2>
+    <div class="opt on" data-m="zip"><span class="rd"></span><div>all layers + scene.json<small>${state.layers.length} transparent pngs named by order, plus positions, as one .zip</small></div><span class="sz">~${fmtSize(total)}</span></div>
+    <div class="opt" data-m="game"><span class="rd"></span><div>game-ready zip<small>same as above but leaves out hidden and empty layers, so only what the game needs</small></div><span class="sz">~${fmtSize(state.layers.filter(l=>l.vis&&!isEmptyLayer(l)).reduce((s,l)=>s+store.get(l.id).blob.size,0))}</span></div>
+    <div class="opt" data-m="flat"><span class="rd"></span><div>flattened image<small>one ${state.W}×${state.H} png, visible layers only</small></div><span class="sz">png</span></div>
+    <div class="opt" data-m="one"><span class="rd"></span><div style="flex:1">single layer<small>one transparent png, trimmed to its content</small><select id="ex-layer" aria-label="layer to export">${[...state.layers].reverse().map(l=>`<option value="${l.id}" ${l.id===L0.id?'selected':''}>${esc(l.name)} · ${l.w}×${l.h}</option>`).join('')}</select></div><span class="sz" id="ex-one">${fmtSize(store.get(L0.id).blob.size)}</span></div>
+    <div class="foot"><button class="cancel" id="ex-x">cancel</button><button class="btn-clay" id="ex-go">${ic('download')} export</button></div>`,m=>{
+    $$('.opt',m).forEach(o=>o.addEventListener('click',e=>{if(e.target.closest('select'))return;mode=o.dataset.m;$$('.opt',m).forEach(x=>x.classList.toggle('on',x===o))}));
+    $('#ex-layer',m).addEventListener('change',e=>{$('#ex-one',m).textContent=fmtSize(store.get(e.target.value).blob.size);mode='one';$$('.opt',m).forEach(x=>x.classList.toggle('on',x.dataset.m==='one'))});
+    $('#ex-x',m).onclick=closeModal;
+    $('#ex-go',m).onclick=async()=>{
+      const id=$('#ex-layer',m).value;closeModal();await flushPending();
+      if(mode==='zip')await saveZip();
+      else if(mode==='game')await saveZip(true);
+      else if(mode==='flat')await exportFlat();
+      else{const i=state.layers.findIndex(l=>l.id===id);dl(store.get(id).blob,fileFor(state.layers[i],i));toast('exported '+state.layers[i].name,'good')}
+    };
+  });
+}
+async function exportFlat(){
+  await flushPending();setBusy(1);
+  try{
+    const c=document.createElement('canvas');c.width=state.W;c.height=state.H;const x=c.getContext('2d');x.imageSmoothingQuality='high';
+    for(const L of state.layers){
+      if(!L.vis)continue;const bm=await createImageBitmap(store.get(L.id).blob);
+      x.save();x.globalAlpha=L.op;applyM(x,L);x.drawImage(L.tint?tintedSurface(L,null,bm):bm,0,0,L.w,L.h);x.restore();bm.close&&bm.close();
+    }
+    const b=await new Promise(r=>c.toBlob(r,'image/png'));c.width=c.height=0;dl(b,slug(state.name)+'-flat.png');toast('exported flattened image · '+fmtSize(b.size),'good');
+  }catch(err){console.error(err);toast('export failed: '+err.message,'err')}finally{setBusy(-1)}
+}
+$('#tab-export').onclick=exportModal;
+$('#b-save').onclick=saveZip;
+$('#b-undo').onclick=undo;$('#b-redo').onclick=redo;
+
+/* ---------- new scene ---------- */
+const PRESETS=[['hd',1920,1080],['qhd',2560,1440],['4k',3840,2160],['square',2048,2048],['portrait',2160,3840]];
+$('#b-new').onclick=()=>{
+  let pick=2;
+  openModal(`<h2><span class="d">$</span> new scene</h2>
+    <label class="dim">name<input type="text" id="ns-name" value="scene-${String(Math.floor(Math.random()*90)+10)}" maxlength="40"></label>
+    <div class="dim">size</div>
+    ${PRESETS.map((p,i)=>`<div class="opt ${i===pick?'on':''}" data-i="${i}"><span class="rd"></span><div>${p[0]}</div><span class="sz">${p[1]}×${p[2]}</span></div>`).join('')}
+    <div class="foot"><button class="cancel" id="ns-x">cancel</button><button class="btn-clay" id="ns-go">+ new scene</button></div>`,m=>{
+    $$('.opt',m).forEach(o=>o.addEventListener('click',()=>{pick=+o.dataset.i;$$('.opt',m).forEach(x=>x.classList.toggle('on',x===o))}));
+    $('#ns-x',m).onclick=closeModal;
+    $('#ns-go',m).onclick=()=>{
+      if(state.layers.length&&!confirm('start a new scene? save a zip first if you want to keep this one.'))return;
+      const p=PRESETS[pick];resetScene(true);state.W=p[1];state.H=p[2];state.name=$('#ns-name',m).value.trim()||'scene';$('#sname').value=state.name;closeModal();fit(true);changed();
+    };
+    $('#ns-name',m).focus();$('#ns-name',m).select();
+  });
+};
+$('#sname').addEventListener('input',e=>{state.name=e.target.value||'scene';e.target.style.width=Math.max(6,e.target.value.length+2)+'ch';statusBar();saveSoon()});
+$('#sname').addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Enter')e.target.blur()});
+
+/* ---------- panel collapse ---------- */
+function toggleSide(){document.body.classList.toggle('noside');setTimeout(resize,0)}
+$('#b-collapse').onclick=toggleSide;$('#side-open').onclick=toggleSide;
+
+/* ---------- autosave (browser storage - the zip is the real backup) ---------- */
+const savedBlobs=new Set();let saveT=0;
+const idb=()=>new Promise((res,rej)=>{const r=indexedDB.open('layerforge',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+const txDone=tx=>new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=tx.onabort=()=>rej(tx.error)});
+function saveSoon(){clearTimeout(saveT);saveT=setTimeout(saveAuto,900)}
+async function saveAuto(){
+  try{
+    const db=await idb(),tx=db.transaction('kv','readwrite'),st=tx.objectStore('kv');
+    if(!state.layers.length&&!savedBlobs.size){st.clear();if(refBlob)st.put(refBlob,'ref')}
+    for(const l of state.layers){if(!savedBlobs.has(l.id)){st.put(store.get(l.id).blob,'blob:'+l.id);savedBlobs.add(l.id)}}
+    st.put({name:state.name,W:state.W,H:state.H,sel:state.sel,layers:state.layers},'meta');
+    await txDone(tx);db.close();
+  }catch(err){console.warn('autosave unavailable',err)}
+}
+async function loadAuto(){
+  try{
+    const db=await idb(),st=db.transaction('kv').objectStore('kv');
+    const get=k=>new Promise((res,rej)=>{const r=st.get(k);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+    const [meta,rb]=await Promise.all([get('meta'),get('ref')]);
+    if(rb)setRef(rb,true);
+    if(meta&&meta.layers&&meta.layers.length){
+      const blobs=await Promise.all(meta.layers.map(l=>get('blob:'+l.id))); // read everything before the transaction closes
+      setBusy(1);state.name=meta.name||'scene-01';state.W=meta.W||3840;state.H=meta.H||2160;
+      for(let i=0;i<meta.layers.length;i++){
+        const l=meta.layers[i],b=blobs[i];if(!b)continue;const r=await makeRec(b,{trim:false});if(!r)continue;
+        store.set(l.id,r.rec);state.layers.push({...l,w:r.rec.w,h:r.rec.h});savedBlobs.add(l.id);
+      }
+      state.sel=state.layers.some(l=>l.id===meta.sel)?meta.sel:(state.layers.length?state.layers[state.layers.length-1].id:null);
+      setBusy(-1);
+    }
+    db.close();
+  }catch(err){console.warn('could not restore autosave',err);if(state.busy)setBusy(-1)}
+}
+
+/* ---------- glue ---------- */
+function changed(){syncChildren();if(sess&&state.sel!==sess.id){cancelWand();setTool('move')}if(cs&&state.sel!==cs.id)cancelCut();draw();renderLayers();statusBar();saveSoon();$('#b-undo').disabled=!U.length;$('#b-redo').disabled=!R.length}
+function changedFast(){syncChildren();draw();syncInspector();statusBar();saveSoon()}
+addEventListener('beforeunload',()=>{});
+new ResizeObserver(resize).observe(stage);
+
+/* ---------- shapes: circle, square, hexagon, star; kept editable (colour, size, blur, glow) as long as the layer is not painted on ---------- */
+var sdrag=null,shapeSess=null,shapeKind='circle',shapeFill='#D97757';
+const SHAPE_TYPES=['circle','square','hexagon','star'];
+const hex6=c=>/^#[0-9a-f]{6}$/i.test(c);
+function shapeClean(o,bs){const t=SHAPE_TYPES.includes(o.type)?o.type:'circle',n=(v,a,b,d)=>{v=+v;return isFinite(v)?Math.min(b,Math.max(a,v)):d};
+  return {type:t,fill:hex6(o.fill)?o.fill:'#D97757',w:n(o.w,4,7680,300),h:n(o.h,4,7680,300),blur:n(o.blur,0,100,0),glow:n(o.glow,0,100,0),gc:hex6(o.gc)?o.gc:(hex6(o.fill)?o.fill:'#D97757'),round:n(o.round,0,100,0),points:Math.round(n(o.points,3,12,5)),inner:n(o.inner,0.15,0.9,0.5),bs}}
+const shapePublic=sh=>{const {bs,...o}=sh;return o};
+function shapeOk(l){if(!l.shape)return false;const r=store.get(l.id);return !!(r&&r.blob&&r.blob.size===l.shape.bs)}
+function shapePath(c,t,x,y,w,h,sh){
+  c.beginPath();
+  if(t==='circle')c.ellipse(x+w/2,y+h/2,w/2,h/2,0,0,Math.PI*2);
+  else if(t==='square'){const r=Math.min(w,h)/2*((sh.round||0)/100);if(r>0.5){c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}else c.rect(x,y,w,h)}
+  else{
+    const pts=[];
+    if(t==='hexagon')for(let k=0;k<6;k++){const a=(-90+60*k)*Math.PI/180;pts.push([Math.cos(a),Math.sin(a)])}
+    else{const n=sh.points||5,ir=sh.inner||.5;for(let k=0;k<n*2;k++){const a=(-90+180*k/n)*Math.PI/180,r=k%2?ir:1;pts.push([r*Math.cos(a),r*Math.sin(a)])}}
+    let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;for(const q of pts){x0=Math.min(x0,q[0]);x1=Math.max(x1,q[0]);y0=Math.min(y0,q[1]);y1=Math.max(y1,q[1])}
+    pts.forEach((q,i)=>{const X=x+(q[0]-x0)/(x1-x0)*w,Y=y+(q[1]-y0)/(y1-y0)*h;i?c.lineTo(X,Y):c.moveTo(X,Y)});c.closePath();
+  }
+}
+function shapeBlurCanvas(src,rad){ // blur a canvas in code (works in every browser): done at reduced size, which a blur does not mind
+  const W=src.width,H=src.height,f=Math.min(1,1024/Math.max(W,H)),sw=Math.max(1,Math.round(W*f)),sh2=Math.max(1,Math.round(H*f));
+  const a=document.createElement('canvas');a.width=sw;a.height=sh2;const ac=a.getContext('2d',{willReadFrequently:true});ac.imageSmoothingQuality='high';ac.drawImage(src,0,0,sw,sh2);
+  const id=ac.getImageData(0,0,sw,sh2),B=feelBlur(id.data,sw,sh2,Math.max(1,rad*f*1.2)),o=new Uint8ClampedArray(sw*sh2*4);
+  for(let i=0;i<sw*sh2;i++){const al=B[i*4+3];o[i*4+3]=Math.round(al);if(al>0.5){o[i*4]=B[i*4]*255/al;o[i*4+1]=B[i*4+1]*255/al;o[i*4+2]=B[i*4+2]*255/al}}
+  ac.putImageData(new ImageData(o,sw,sh2),0,0);
+  if(f===1)return a;
+  const out=document.createElement('canvas');out.width=W;out.height=H;const oc=out.getContext('2d');oc.imageSmoothingQuality='high';oc.drawImage(a,0,0,W,H);a.width=a.height=0;return out;
+}
+function renderShape(sh){
+  const pad=Math.ceil((sh.blur+sh.glow)*2.4)+2,w=Math.max(1,Math.round(sh.w)),h=Math.max(1,Math.round(sh.h)),W=Math.min(8192,w+2*pad),H=Math.min(8192,h+2*pad);
+  const mk=()=>{const c=document.createElement('canvas');c.width=W;c.height=H;return c};
+  const out=mk(),oc=out.getContext('2d');
+  if(sh.glow>0){const g=mk(),gc=g.getContext('2d');gc.fillStyle=sh.gc;shapePath(gc,sh.type,pad,pad,w,h,sh);gc.fill();const gb2=shapeBlurCanvas(g,sh.glow);oc.drawImage(gb2,0,0);oc.drawImage(gb2,0,0);gb2.width=gb2.height=0;g.width=g.height=0}
+  let b=mk();const bc=b.getContext('2d');bc.fillStyle=sh.fill;shapePath(bc,sh.type,pad,pad,w,h,sh);bc.fill();
+  if(sh.blur>0){const b2=shapeBlurCanvas(b,sh.blur);b.width=b.height=0;b=b2}
+  oc.drawImage(b,0,0);b.width=b.height=0;
+  return {cv:out,W,H};
+}
+function shapePlace(L,W,H){ // new size, same centre on the picture
+  const [cx,cy]=l2s(L,L.w/2,L.h/2);L.w=W;L.h=H;L.x=0;L.y=0;const [tx,ty]=l2s(L,W/2,H/2);L.x=cx-tx;L.y=cy-ty;
+}
+function shapeLive(id,patch){ // preview while a slider moves (no undo step yet)
+  const L=state.layers.find(l=>l.id===id),r=store.get(id);if(!L||!L.shape||!r)return;
+  if(!shapeSess||shapeSess.id!==id)shapeSess={id,blob:r.blob,meta:snapshot()};
+  Object.assign(L.shape,patch);
+  const {cv,W,H}=renderShape(L.shape);shapePlace(L,W,H);
+  r.pv=cv;r.w=W;r.h=H;Object.assign(r,maskFrom(cv));r.tc=null;tcache.clear();
+  changedFast();const row=$(`.row[data-id="${id}"] canvas.thumb`,LP);if(row)drawThumb(row,r,L);
+}
+async function shapeCommit(){
+  const ss=shapeSess;if(!ss)return;shapeSess=null;
+  const L=state.layers.find(l=>l.id===ss.id),r=store.get(ss.id);if(!L||!r||!L.shape)return;
+  const cv=r.pv,blob=await toBlobAsync(cv);if(r.pv!==cv)return;
+  r.blob=blob;L.shape.bs=blob.size;savedBlobs.delete(ss.id);
+  U.push({px:ss.id,blob:ss.blob,meta:ss.meta});if(U.length>100)U.shift();R.length=0;
+  lastStruct='';changed();
+}
+function shapeDefaults(type,fill,w,h){return shapeClean({type,fill,w,h,gc:fill},0)}
+async function shapeCreate(type,fill,cx,cy,w,h){
+  const sh=shapeDefaults(type,fill,w,h),{cv,W,H}=renderShape(sh),blob=await toBlobAsync(cv),id=newId(),m=maskFrom(cv);
+  sh.bs=blob.size;store.set(id,{blob,pv:cv,mask:m.mask,mw:m.mw,mh:m.mh,w:W,h:H});
+  const n=state.layers.filter(l=>l.shape&&l.shape.type===type).length+1,i=state.layers.findIndex(l=>l.id===state.sel);
+  edit(()=>{state.layers.splice(i<0?state.layers.length:i+1,0,{id,name:type+' '+n,x:Math.round(cx-W/2),y:Math.round(cy-H/2),w:W,h:H,scale:1,rot:0,px:.5,py:.5,op:1,vis:true,lock:false,ai:false,shape:sh});state.sel=id});
+  setTool('move');
+  setTimeout(()=>{const row=$(`.row[data-id="${id}"]`,LP);if(row)row.scrollIntoView({block:'nearest'})},60);
+  toast('shape made · its colour, size, blur and glow are in the layer panel on the right, under its name','good');
+}
+function shapeFromDrag(d){
+  let x0=d.a.x,y0=d.a.y,x1=d.b.x,y1=d.b.y,w=Math.abs(x1-x0),h=Math.abs(y1-y0);
+  if(w<8&&h<8){shapeCreate(shapeKind,shapeFill,x0,y0,300,300);return}
+  if(d.shift||shapeKind==='hexagon'&&false){const m=Math.max(w,h);x1=x0+Math.sign(x1-x0||1)*m;y1=y0+Math.sign(y1-y0||1)*m;w=h=m}
+  shapeCreate(shapeKind,shapeFill,(x0+x1)/2,(y0+y1)/2,Math.max(4,Math.round(w)),Math.max(4,Math.round(h)));
+}
+function shapePreview(){
+  const d=sdrag;let x0=d.a.x,y0=d.a.y,x1=d.b.x,y1=d.b.y;
+  if(d.shift){const m=Math.max(Math.abs(x1-x0),Math.abs(y1-y0));x1=x0+Math.sign(x1-x0||1)*m;y1=y0+Math.sign(y1-y0||1)*m}
+  const a=toScreen([Math.min(x0,x1),Math.min(y0,y1)]),b=toScreen([Math.max(x0,x1),Math.max(y0,y1)]);
+  ctx.save();ctx.fillStyle=shapeFill+'66';ctx.strokeStyle='#D97757';ctx.lineWidth=1.5;ctx.setLineDash([7,5]);
+  shapePath(ctx,shapeKind,a.x,a.y,Math.max(1,b.x-a.x),Math.max(1,b.y-a.y),{round:0,points:5,inner:.5});ctx.fill();ctx.stroke();ctx.restore();
+}
+$('#stypes').addEventListener('click',e=>{const b=e.target.closest('[data-st]');if(!b)return;shapeKind=b.dataset.st;$$('#stypes .sm').forEach(x=>x.classList.toggle('on',x===b))});
+$('#scol').addEventListener('input',e=>{shapeFill=e.target.value});
+function shapeInspector(L){
+  if(!L.shape||!shapeOk(L))return '';const s=L.shape,o=t=>`<option value="${t}"${s.type===t?' selected':''}>${t}</option>`;
+  const sl=(f,lab,min,max,step,tt)=>`<div class="line"><label>${lab}</label><input type="range" min="${min}" max="${max}" step="${step}" data-sh="${f}" value="${s[f]}" aria-label="${lab}" title="${tt||''}"><span class="dim pv" data-shv="${f}" style="min-width:34px;text-align:right"></span></div>`;
+  return `<div class="shbox"><div class="line"><label>shape</label><select class="shsel" data-sh="type" aria-label="shape type">${SHAPE_TYPES.map(o).join('')}</select><input type="color" class="tcol" data-sh="fill" value="${s.fill}" aria-label="shape colour" title="shape colour"></div>
+    <div class="line"><label>size</label><input type="number" class="shw" data-sh="w" min="4" max="7680" aria-label="shape width"><span class="dim">×</span><input type="number" class="shw" data-sh="h" min="4" max="7680" aria-label="shape height"><button class="sm" data-shact="crisp" title="the shape was stretched with the scale tool: redraw it sharp at its current size (scale goes back to 100%)">crisp</button></div>
+    ${s.type==='square'?sl('round','corners',0,100,1,'rounded corners'):''}${s.type==='star'?sl('points','points',3,12,1)+sl('inner','depth',0.15,0.9,0.05,'how deep the points cut in'):''}
+    ${sl('blur','blur',0,100,1,'soften the whole shape')}
+    <div class="line"><label>glow</label><input type="range" min="0" max="100" step="1" data-sh="glow" value="${s.glow}" aria-label="glow size" title="a soft glow around the shape"><input type="color" class="tcol" data-sh="gc" value="${s.gc}" aria-label="glow colour" title="glow colour"></div></div>`;
+}
+function shapeSync(L,act){
+  if(!shapeOk(L))return;const s=L.shape,set=(f,v)=>{const el=$(`[data-sh="${f}"]`,LP);if(el&&el!==act)el.value=v};
+  set('type',s.type);set('fill',s.fill);set('w',Math.round(s.w*L.scale));set('h',Math.round(s.h*L.scale));set('blur',s.blur);set('glow',s.glow);set('gc',s.gc);set('round',s.round);set('points',s.points);set('inner',s.inner);
+  const pv=f=>{const e=$(`[data-shv="${f}"]`,LP);if(e)e.textContent=f==='inner'?Math.round(s.inner*100)+'%':f==='points'||f==='round'?s[f]:s[f]+'px'};['blur','round','points','inner'].forEach(pv);
+}
+LP.addEventListener('input',e=>{
+  const f=e.target.dataset&&e.target.dataset.sh;if(!f)return;const L=sel();if(!L||!shapeOk(L))return;let v=e.target.value;
+  const patch={};
+  if(f==='type'||f==='fill'||f==='gc')patch[f]=v;
+  else if(f==='w'||f==='h'){v=+v;if(!(v>=4))return;patch[f]=Math.min(7680,v/L.scale)}
+  else{v=+v;if(!isFinite(v))return;patch[f]=v}
+  if(f==='fill'&&L.shape.gc===L.shape.fill)patch.gc=v;
+  shapeLive(L.id,patch);
+});
+LP.addEventListener('change',e=>{
+  const f=e.target.dataset&&e.target.dataset.sh;if(!f)return;shapeCommit();
+});
+LP.addEventListener('click',e=>{
+  const b=e.target.closest('[data-shact="crisp"]');if(!b)return;const L=sel();if(!L||!shapeOk(L))return;
+  if(Math.abs(L.scale-1)<0.001)return toast('already at 100% - nothing to sharpen');
+  const keep=L.scale;setPivot(L,.5,.5);
+  shapeLive(L.id,{w:Math.min(7680,L.shape.w*keep),h:Math.min(7680,L.shape.h*keep)});
+  // bake the scale into the size: the picture stays exactly where it is on screen, its children (if any) stay put
+  const [cx,cy]=l2s(L,L.w/2,L.h/2);L.scale=1;shapePlace(L,L.w,L.h);
+  tcache.clear();shapeCommit();
+});
+
+window.__lf={shapeCreate,shapeLive,shapeCommit,shapeOk,renderShape,get sdrag(){return sdrag},cornersFlat,autoWandLayer,autoBgSel,planParse,openPlan,finishPlans,cropRef,syncChildren,tcache,finishPick,startPick,detachLayer,get pickPar(){return pickPar},dupLayer,makeVariants,feelPreview,feelApply,feelCancel,get fs(){return fs},get gb(){return gb},set gb(v){gb=v;gbBtn();draw()},gbToggle,gbHit,gbPts,enqueueUpscale,flattenScene,mergeLayers,selIds,msel,rdCut,get rd(){return rd},rdPaint,enqueueRedraw,getRefs,composePrompt,setRef,getRefs,cutRegion,get cs(){return cs},applyCut,state,store,view,brush,applyWand,cfg,jobs,enqueue,setTool,addBlank,importFiles,saveZip,zipBuild,zipRead,edit,undo,redo,fit}; // handy for debugging
+(async()=>{
+  $('#sname').value=state.name;$('#sname').style.width='10ch';
+  if(innerWidth<1000)document.body.classList.add('noside');
+  resize();
+  await loadAuto();
+  $('#sname').value=state.name;$('#sname').style.width=Math.max(6,state.name.length+2)+'ch';
+  const L=maxIdFix();fit(true);changed();initAI();
+})();
+function maxIdFix(){state.layers.forEach(l=>{const n=parseInt(String(l.id).slice(1),10);if(n>idn)idn=n})}
+})();
+</script>
+</body>
+</html>
