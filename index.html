@@ -73,6 +73,8 @@ body.noside #side{display:none}
 #zoombar .pct{min-width:64px;text-align:center;color:var(--dim)}
 #tbar{position:absolute;left:14px;top:14px;display:none;align-items:center;gap:14px;padding:4px 14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:48px}
 #tbar.show{display:flex}
+.fxem{display:flex;gap:4px;align-items:center;margin-bottom:5px}.fxem .emn{flex:1;min-width:0;text-align:left;height:34px;padding:0 10px;border:1px solid var(--line);border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fxem.on .emn{border-color:var(--clay);color:var(--clay-text)}.fxem.off .emn{opacity:.45}.fxem .sm{height:34px;min-width:34px;padding:0 6px;border:1px solid var(--line)}.fxem .sm:disabled{opacity:.3}
 #fxp{position:absolute;inset:0;display:none;background:var(--bg);z-index:30;grid-template-columns:minmax(0,1fr) 370px;min-height:0}
 #fxp.show{display:grid}
 #fxv{position:relative;min-width:0;min-height:0;border-right:1px solid var(--line)}
@@ -2435,7 +2437,7 @@ async function loadAuto(){
       setBusy(1);state.name=meta.name||'scene-01';state.W=meta.W||3840;state.H=meta.H||2160;
       for(let i=0;i<meta.layers.length;i++){
         const l=meta.layers[i],b=blobs[i];if(!b)continue;const r=await makeRec(b,{trim:false});if(!r)continue;
-        store.set(l.id,r.rec);state.layers.push({...l,w:r.rec.w,h:r.rec.h});savedBlobs.add(l.id);
+        store.set(l.id,r.rec);state.layers.push(fxNormLayer({...l,w:r.rec.w,h:r.rec.h}));savedBlobs.add(l.id);
       }
       state.sel=state.layers.some(l=>l.id===meta.sel)?meta.sel:(state.layers.length?state.layers[state.layers.length-1].id:null);
       setBusy(-1);
@@ -2617,10 +2619,30 @@ function lfFxEngine(){
   };
   // how far from the emitter the particles can get (used to size the layer's picture)
   function reach(p){
+    if(p.emitters){var m=64;for(var i=0;i<p.emitters.length;i++)if(!p.emitters[i].mute)m=Math.max(m,reach(p.emitters[i]));return m}
     var L=p.lifeMax,d=p.drag,sp=p.speedMax,dist=d>0.01?sp*(1-Math.exp(-d*L))/d:sp*L,g2=Math.abs(p.gravity)*L*L/2,g=d>0.01?Math.min(g2,Math.abs(p.gravity)/d*L):g2;
     return Math.max(64,Math.min(900,p.radius+dist+g+p.sizeMax*Math.max(1,p.endScale)));
   }
-  return {System:System,reach:reach,version:1};
+  // an Effect = a stack of emitters that play together; each emitter has its own settings, an optional start delay (seconds) and can be muted
+  function Effect(effect,sprites,seed){
+    var em=effect.emitters||[effect],i;this.emitters=em;this.systems=[];this.t=0;
+    for(i=0;i<em.length;i++)this.systems.push(em[i].mute||!sprites[i]?null:new System(em[i],sprites[i],seed==null?em[i].seed:seed+i*7919));
+  }
+  Effect.prototype.reset=function(){this.t=0;for(var i=0;i<this.systems.length;i++)if(this.systems[i])this.systems[i].reset()};
+  Effect.prototype.update=function(dt){
+    dt=Math.min(dt,.25);var t1=this.t+dt,i;
+    for(i=0;i<this.systems.length;i++){var s=this.systems[i];if(!s)continue;var d=this.emitters[i].delay||0;if(t1<=d)continue;s.update(Math.min(dt,t1-d))}
+    this.t=t1;
+  };
+  Object.defineProperty(Effect.prototype,'done',{get:function(){for(var i=0;i<this.systems.length;i++){var s=this.systems[i];if(!s)continue;if(this.t<(this.emitters[i].delay||0)||!s.done)return false}return true}});
+  Object.defineProperty(Effect.prototype,'count',{get:function(){var n=0;for(var i=0;i<this.systems.length;i++)if(this.systems[i])n+=this.systems[i].parts.length;return n}});
+  Effect.prototype.draw=function(c,x,y,s,o){for(var i=0;i<this.systems.length;i++)if(this.systems[i])this.systems[i].draw(c,x,y,s,o)};
+  // load every sprite of an effect from its "sprite" paths (base = folder prefix, e.g. "assets/") and give back a ready Effect
+  function load(effect,base){
+    base=base||'';
+    return Promise.all(effect.emitters.map(function(m){return new Promise(function(res,rej){var im=new Image();im.onload=function(){res(im)};im.onerror=function(){rej(new Error('could not load '+m.sprite))};im.src=base+m.sprite})})).then(function(imgs){return new Effect(effect,imgs)});
+  }
+  return {System:System,Effect:Effect,reach:reach,load:load,version:2};
 }
 const FXE=lfFxEngine();
 
@@ -2629,9 +2651,9 @@ const FXP=[['count','count',1,600,1,'','burst'],['rate','per second',1,300,1,'',
   ['lifeMin','life min',0.1,6,0.05,'s'],['lifeMax','life max',0.1,8,0.05,'s'],['speedMin','speed min',0,1500,5,''],['speedMax','speed max',0,1800,5,''],
   ['angle','direction',-180,180,1,'°'],['spread','spread',0,360,1,'°'],['gravity','gravity',-1200,1600,5,''],['drag','drag',0,6,0.05,''],
   ['sizeMin','size min',2,300,1,'px'],['sizeMax','size max',2,400,1,'px'],['endScale','end size',0,4,0.05,'×'],
-  ['alpha0','start alpha',0,1,0.01,''],['alpha1','end alpha',0,1,0.01,''],['spinMin','spin min',-720,720,5,'°/s'],['spinMax','spin max',-720,720,5,'°/s'],['radius','emitter size',0,600,1,'px']];
+  ['alpha0','start alpha',0,1,0.01,''],['alpha1','end alpha',0,1,0.01,''],['spinMin','spin min',-720,720,5,'°/s'],['spinMax','spin max',-720,720,5,'°/s'],['radius','emitter size',0,600,1,'px'],['delay','start delay',0,5,0.05,'s']];
 const FXPK=Object.fromEntries(FXP.map(a=>[a[0],a]));
-const FXDEF={v:1,recipe:'explosion',mode:'burst',count:120,rate:40,burstTime:0.02,lifeMin:0.4,lifeMax:1,speedMin:150,speedMax:600,angle:-90,spread:360,gravity:80,drag:2.2,sizeMin:40,sizeMax:100,endScale:0.3,alpha0:1,alpha1:0,spinMin:-90,spinMax:90,radius:10,color0:'#FFD27A',color1:'#E5484D',blend:'add',tint:true,face:false,multi:null,spr:'builtin:soft',seed:1};
+const FXDEF={v:1,recipe:'explosion',mode:'burst',count:120,rate:40,burstTime:0.02,lifeMin:0.4,lifeMax:1,speedMin:150,speedMax:600,angle:-90,spread:360,gravity:80,drag:2.2,sizeMin:40,sizeMax:100,endScale:0.3,alpha0:1,alpha1:0,spinMin:-90,spinMax:90,radius:10,delay:0,mute:false,color0:'#FFD27A',color1:'#E5484D',blend:'add',tint:true,face:false,multi:null,spr:'builtin:soft',seed:1};
 const FXR={ // recipes: a [low, high] range for each setting; roll picks inside it
   explosion:{mode:'burst',blend:'add',spr:'soft',pal:[['#FFD27A','#E5484D'],['#FFF2B0','#FF7A1A'],['#BFE6FF','#3E8EF7'],['#FFE9A8','#B8321F']],r:{count:[80,220],burstTime:[0,0.05],lifeMin:[0.3,0.5],lifeMax:[0.7,1.3],speedMin:[100,250],speedMax:[400,900],angle:[-90,-90],spread:[360,360],gravity:[0,200],drag:[1.5,3.5],sizeMin:[30,60],sizeMax:[70,140],endScale:[0.1,0.5],alpha0:[0.8,1],alpha1:[0,0],spinMin:[-120,-30],spinMax:[30,120],radius:[0,30]}},
   smoke:{mode:'loop',blend:'normal',spr:'smoke',pal:[['#C9C6BD','#6B6862'],['#FFFFFF','#8A8A8A'],['#8E8A82','#3A3835']],r:{rate:[8,30],lifeMin:[1.2,2.2],lifeMax:[2.4,4.2],speedMin:[20,50],speedMax:[60,120],angle:[-90,-90],spread:[20,60],gravity:[-70,-10],drag:[0.2,1],sizeMin:[40,80],sizeMax:[90,180],endScale:[1.6,3],alpha0:[0.25,0.5],alpha1:[0,0],spinMin:[-40,-10],spinMax:[10,40],radius:[5,30]}},
@@ -2665,47 +2687,55 @@ function fxSprite(spr){
 function fxClean(o,bs){
   const n=(k,d)=>{const a=FXPK[k],v=+o[k];return isFinite(v)&&o[k]!==null&&o[k]!==''?Math.min(a[3],Math.max(a[2],v)):d};
   const p={...FXDEF};for(const a of FXP)p[a[0]]=n(a[0],FXDEF[a[0]]);
-  p.recipe=FXR[o.recipe]?o.recipe:'explosion';p.mode=o.mode==='loop'?'loop':'burst';p.blend=o.blend==='normal'?'normal':'add';p.tint=o.tint!==false;p.face=!!o.face;
+  p.recipe=FXR[o.recipe]?o.recipe:'explosion';p.mode=o.mode==='loop'?'loop':'burst';p.blend=o.blend==='normal'?'normal':'add';p.tint=o.tint!==false;p.face=!!o.face;p.mute=!!o.mute;
   p.color0=hex6(o.color0)?o.color0:FXDEF.color0;p.color1=hex6(o.color1)?o.color1:FXDEF.color1;
   p.multi=Array.isArray(o.multi)&&o.multi.length?o.multi.filter(hex6).slice(0,12):null;if(p.multi&&!p.multi.length)p.multi=null;
   p.spr=typeof o.spr==='string'&&(o.spr.startsWith('builtin:')||o.spr.startsWith('data:image/'))?o.spr:'builtin:soft';
-  p.seed=Math.floor(Math.abs(+o.seed))||1;if(bs!=null)p.bs=bs;return p;
+  p.seed=Math.floor(Math.abs(+o.seed))||1;return p;
 }
+const fxCleanFx=(o,bs)=>({emitters:(Array.isArray(o.emitters)&&o.emitters.length?o.emitters:[o]).slice(0,8).map(e=>fxClean(e)),bs});
 const fxQ=(k,v)=>{const a=FXPK[k];if(!a)return v;const st=a[4],q=Math.round(v/st)*st;return +Math.min(a[3],Math.max(a[2],q)).toFixed(3)};
-function fxOk(l){if(!l.fx)return false;const r=store.get(l.id);return !!(r&&r.blob&&r.blob.size===l.fx.bs)}
-async function fxPoster(p){ // the still picture an effect layer shows: the effect caught part-way through
-  const spr=await fxSprite(p.spr),half=Math.ceil(FXE.reach(p)),W=Math.max(32,half*2),sys=new FXE.System(p,spr,p.seed);
-  sys.update(p.mode==='loop'?Math.min(p.lifeMax*1.3,3):Math.min(p.burstTime+p.lifeMax*0.35,1.2));
+function fxOk(l){if(!l.fx||!l.fx.emitters)return false;const r=store.get(l.id);return !!(r&&r.blob&&r.blob.size===l.fx.bs)}
+function fxPosterT(fx){const a=fx.emitters.filter(e=>!e.mute).map(p=>(p.delay||0)+(p.mode==='loop'?Math.min(p.lifeMax*1.3,3):Math.min(p.burstTime+p.lifeMax*0.35,1.2)));return a.length?a.reduce((x,y)=>x+y,0)/a.length:0.3}
+const fxSprites=em=>Promise.all(em.map(e=>fxSprite(e.spr)));
+async function fxPoster(fx){ // the still picture an effect layer shows: the effect caught part-way through
+  const sp=await fxSprites(fx.emitters),half=Math.ceil(FXE.reach(fx)),W=Math.max(32,half*2),sys=new FXE.Effect(fx,sp);
+  sys.update(fxPosterT(fx));
   const cv=document.createElement('canvas');cv.width=cv.height=W;sys.draw(cv.getContext('2d'),W/2,W/2,1);
   return {cv,W,H:W};
 }
 /* ----- state, favourites ----- */
-const fxs={p:null,locks:new Set(),editId:null,amount:0.3,sys:null,sprite:null,open:false,raf:0,last:0,idle:0,sprPicked:false,favs:[],cv:null};
-try{const a=JSON.parse(localStorage.getItem('lf-fxfavs'));if(Array.isArray(a))fxs.favs=a.filter(f=>f&&f.p).slice(0,24).map(f=>({name:String(f.name||'effect').slice(0,30),p:fxClean(f.p)}))}catch(_){}
+const fxs={p:null,em:[],sel:0,tok:0,sprites:[],locks:new Set(),editId:null,amount:0.3,sys:null,sprite:null,open:false,raf:0,last:0,idle:0,sprPicked:false,favs:[],cv:null};
+try{const a=JSON.parse(localStorage.getItem('lf-fxfavs'));if(Array.isArray(a))fxs.favs=a.filter(f=>f&&(f.em||f.p)).slice(0,24).map(f=>({name:String(f.name||'effect').slice(0,30),em:fxCleanFx(f.em?{emitters:f.em}:f.p).emitters}))}catch(_){}
 const fxSaveFavs=()=>{try{localStorage.setItem('lf-fxfavs',JSON.stringify(fxs.favs))}catch(_){toast('could not keep favourites in this browser','warn')}};
 const fxRand=(a,b)=>a+Math.random()*(b-a);
-function fxRoll(rk){
-  const key=FXR[rk]?rk:(fxs.p&&fxs.p.recipe)||'explosion',R=FXR[key],p={...(fxs.p||FXDEF),recipe:key},L=fxs.locks;
+const fxSetP=p=>{fxs.p=p;fxs.em[fxs.sel]=p};
+const fxPicked=e=>e.spr!=='builtin:'+FXR[e.recipe].spr;
+function fxRoll(rk){fxSetP(fxRollOne(fxs.p,rk,fxs.sprPicked));fxRefresh()}
+function fxRollAll(){fxs.em=fxs.em.map(e=>fxRollOne(e,e.recipe,fxPicked(e)));fxs.p=fxs.em[fxs.sel];fxRefresh()}
+function fxRollOne(base,rk,picked){
+  const key=FXR[rk]?rk:(base&&base.recipe)||'explosion',R=FXR[key],p={...(base||FXDEF),recipe:key},L=fxs.locks;
   for(const k in R.r){if(L.has(k))continue;const [a,b]=R.r[k];p[k]=fxQ(k,fxRand(a,b))}
   if(!L.has('mode'))p.mode=R.mode;if(!L.has('blend'))p.blend=R.blend;p.face=!!R.face;
   if(!L.has('color')){const pal=R.pal[Math.floor(Math.random()*R.pal.length)];p.color0=pal[0];p.color1=pal[1];p.multi=R.multi?R.multi[0]:null}
-  if(!fxs.sprPicked)p.spr='builtin:'+R.spr;
+  if(!picked)p.spr='builtin:'+R.spr;
   if(!L.has('seed'))p.seed=1+Math.floor(Math.random()*1e6);
   for(const [a,b] of [['lifeMin','lifeMax'],['speedMin','speedMax'],['sizeMin','sizeMax'],['spinMin','spinMax']])if(p[a]>p[b]){const t=p[a];p[a]=p[b];p[b]=t}
-  fxs.p=fxClean(p);fxs.p.seed=p.seed;fxRefresh();
+  const out=fxClean(p);out.seed=p.seed;return out;
 }
 function fxMutate(){
   if(!fxs.p)return fxRoll();const p={...fxs.p},am=fxs.amount;
   for(const a of FXP){const k=a[0];if(fxs.locks.has(k))continue;p[k]=fxQ(k,p[k]+(Math.random()-.5)*2*am*(a[3]-a[2])*0.25)}
   if(!fxs.locks.has('seed'))p.seed=1+Math.floor(Math.random()*1e6);
-  fxs.p=fxClean(p);fxs.p.seed=p.seed;fxRefresh();
+  const out=fxClean(p);out.seed=p.seed;fxSetP(out);fxRefresh();
 }
 /* ----- the fx tab ----- */
 const FXP_=$('#fxp');
 function fxBuild(){
   const rows=FXP.map(a=>`<div class="fxrow" data-row="${a[0]}"${a[6]?` data-only="${a[6]}"`:''}><label>${a[1]}</label><input type="range" min="${a[2]}" max="${a[3]}" step="${a[4]}" data-fx="${a[0]}" aria-label="${a[1]}"><span class="dim fxv" data-fxv="${a[0]}"></span><button class="lk" data-lk="${a[0]}" title="lock: this stays as it is when you roll or mutate" aria-label="lock ${a[1]}">○</button></div>`).join('');
-  $('#fxc').innerHTML=`<div class="fxsec"><div class="fxh">$ sprite</div><div class="fxspr" id="fxspr">${FXSPRN.map(n=>`<button class="sm" data-spr="${n}">${n}</button>`).join('')}<button class="sm" data-spr="layer" title="use the selected layer's picture as the particle">selected layer</button><button class="sm" data-spr="upload" title="use a png from your device">upload…</button></div><input type="file" id="fxfile" accept="image/*" hidden></div>
-  <div class="fxsec"><div class="fxh">$ effect</div><div class="fxbig"><select id="fxrec" aria-label="recipe">${Object.keys(FXR).map(k=>`<option value="${k}">${k}</option>`).join('')}</select><button class="btn-clay" id="fxroll" title="new random effect from this recipe (anything locked stays)">🎲 roll</button></div>
+  $('#fxc').innerHTML=`<div class="fxsec"><div class="fxh">$ stack <span class="dim">· parts play together</span></div><div id="fxstack"></div><div class="fxbig"><select id="fxnewrec" aria-label="recipe for a new part">${Object.keys(FXR).map(k=>`<option value="${k}"${k==='fire'?' selected':''}>${k}</option>`).join('')}</select><button class="sm" id="fxaddem" title="add another part to this effect (up to 8)">＋ add part</button><button class="sm" id="fxrollall" title="roll every part (locks still hold)">🎲 all</button></div><div class="dim" id="fxedit"></div></div>
+  <div class="fxsec"><div class="fxh">$ sprite</div><div class="fxspr" id="fxspr">${FXSPRN.map(n=>`<button class="sm" data-spr="${n}">${n}</button>`).join('')}<button class="sm" data-spr="layer" title="use the selected layer's picture as the particle">selected layer</button><button class="sm" data-spr="upload" title="use a png from your device">upload…</button></div><input type="file" id="fxfile" accept="image/*" hidden></div>
+  <div class="fxsec"><div class="fxh">$ this part</div><div class="fxbig"><select id="fxrec" aria-label="recipe">${Object.keys(FXR).map(k=>`<option value="${k}">${k}</option>`).join('')}</select><button class="btn-clay" id="fxroll" title="new random effect from this recipe (anything locked stays)">🎲 roll</button></div>
     <div class="fxbig"><button class="sm" id="fxmut" title="small changes to this effect (anything locked stays)">↻ mutate</button><input type="range" id="fxamt" min="0.05" max="1" step="0.05" value="0.3" aria-label="how much to change"><button class="sm" id="fxfav" title="keep this effect in your favourites (and in the game zip)">♥ keep</button></div>
     <div class="fxfavs" id="fxfavs"></div></div>
   <div class="fxsec"><div class="fxh">$ look</div>
@@ -2726,16 +2756,23 @@ function fxRefresh(){ // p changed: update the controls and restart the preview
   $$('[data-lk]',$('#fxc')).forEach(b=>{const on=fxs.locks.has(b.dataset.lk);b.textContent=on?'●':'○';b.classList.toggle('on',on)});
   $('#fxupd').hidden=!fxs.editId;$('#fxadd').textContent=fxs.editId?'＋ add as new layer':'＋ add to scene';
   $('#fxmsg').textContent=fxs.editId?'editing the effect layer you opened':'';
-  fxFavsDraw();fxLoadSprite();
+  fxStackDraw();fxFavsDraw();fxLoadSprite();
 }
 async function fxLoadSprite(){
-  const p=fxs.p;if(!p)return;let s;try{s=await fxSprite(p.spr)}catch(e){toast('could not read that picture, using the soft dot','warn');fxs.p.spr='builtin:soft';s=await fxSprite('builtin:soft')}
-  if(fxs.p!==p&&fxs.p.spr!==p.spr)return;fxs.sprite=s;fxRestart();
+  const em=fxs.em,tok=++fxs.tok;if(!em.length)return;
+  const sp=await Promise.all(em.map(async e=>{try{return await fxSprite(e.spr)}catch(_){toast('could not read a picture, using the soft dot','warn');e.spr='builtin:soft';return fxSprite('builtin:soft')}}));
+  if(tok!==fxs.tok)return;fxs.sprites=sp;fxRestart();
 }
-function fxRestart(){if(!fxs.p||!fxs.sprite)return;fxs.sys=new FXE.System(fxs.p,fxs.sprite,fxs.p.seed);fxs.idle=0}
+function fxRestart(){if(!fxs.em.length||fxs.sprites.length!==fxs.em.length)return;fxs.sys=new FXE.Effect({emitters:fxs.em},fxs.sprites);fxs.idle=0}
+function fxStackDraw(){
+  const el=$('#fxstack');if(!el)return;
+  el.innerHTML=fxs.em.map((e,i)=>`<div class="fxem${i===fxs.sel?' on':''}${e.mute?' off':''}"><button class="emn" data-emsel="${i}" title="edit this part">${i+1} · ${esc(e.recipe)} · ${e.mode}${e.delay?` · +${Math.round(e.delay*100)/100}s`:''}</button><button class="sm" data-emmute="${i}" title="${e.mute?'switch this part on':'switch this part off'}" aria-label="mute part">${e.mute?'○':'●'}</button><button class="sm" data-emup="${i}" title="earlier in the list (drawn underneath)" aria-label="move up"${i?'':' disabled'}>▲</button><button class="sm" data-emdown="${i}" title="later in the list (drawn on top)" aria-label="move down"${i<fxs.em.length-1?'':' disabled'}>▼</button><button class="sm" data-emdel="${i}" title="remove this part" aria-label="remove part"${fxs.em.length>1?'':' disabled'}>×</button></div>`).join('');
+  const ed=$('#fxedit');if(ed)ed.textContent=fxs.em.length>1?'the sprite, look and settings below are for the highlighted part':'';
+}
+function fxSelect(i){fxs.sel=Math.max(0,Math.min(fxs.em.length-1,i));fxs.p=fxs.em[fxs.sel];fxs.sprPicked=fxPicked(fxs.p);fxRefresh()}
 function fxFavsDraw(){
   const el=$('#fxfavs');if(!el)return;
-  el.innerHTML=fxs.favs.length?fxs.favs.map((f,i)=>`<span class="fxfav"><button class="sm" data-fav="${i}" title="load this favourite">♥ ${esc(f.name)}</button><button class="sm" data-favdel="${i}" title="remove this favourite" aria-label="remove favourite">×</button></span>`).join(''):'<span class="dim">hearts you keep show up here</span>';
+  el.innerHTML=fxs.favs.length?fxs.favs.map((f,i)=>`<span class="fxfav"><button class="sm" data-fav="${i}" title="load this favourite (${f.em.length} part${f.em.length>1?'s':''})">♥ ${esc(f.name)}</button><button class="sm" data-favdel="${i}" title="remove this favourite" aria-label="remove favourite">×</button></span>`).join(''):'<span class="dim">hearts you keep show up here</span>';
 }
 function fxTick(now){
   if(!fxs.open)return;fxs.raf=requestAnimationFrame(fxTick);
@@ -2748,16 +2785,16 @@ function fxTick(now){
   if(!fxs.sys)return;
   fxs.sys.update(dt);
   if(fxs.sys.done){fxs.idle+=dt;if(fxs.idle>0.8)fxRestart()}
-  const s=Math.min(2,Math.min(W,H)/(2*FXE.reach(fxs.p)*1.05));
+  const s=Math.min(2,Math.min(W,H)/(2*FXE.reach({emitters:fxs.em})*1.05));
   fxs.sys.draw(x,W/2,H/2,s);
-  x.fillStyle='#7a7870';x.font='11px ui-monospace,Consolas,monospace';x.textAlign='left';x.fillText(fxs.sys.parts.length+' particles · view '+Math.round(s*100)+'%',10,H-10);
+  x.fillStyle='#7a7870';x.font='11px ui-monospace,Consolas,monospace';x.textAlign='left';x.fillText(fxs.sys.count+' particles · view '+Math.round(s*100)+'%',10,H-10);
 }
 function fxOpen(load){
   if(typeof cancelWand==='function'&&sess){cancelWand();setTool('move')}
   fxs.open=true;FXP_.classList.add('show');$('#tab-fx').classList.add('on');$('#tab-canvas').classList.remove('on');
   if(!fxs.cv)fxs.cv=$('#fxcv');
-  if(load){fxs.p=fxClean(load);fxs.sprPicked=true}
-  if(!fxs.p){fxs.sprPicked=false;fxRoll('explosion')}else fxRefresh();
+  if(load){fxs.em=fxCleanFx(load).emitters;fxs.sel=0;fxs.p=fxs.em[0];fxs.sprPicked=true}
+  if(!fxs.em.length){fxs.sprPicked=false;fxs.sel=0;fxSetP({...FXDEF});fxRoll('explosion')}else{fxs.p=fxs.em[fxs.sel]||fxs.em[0];fxRefresh()}
   cancelAnimationFrame(fxs.raf);fxs.last=0;fxs.raf=requestAnimationFrame(fxTick);
 }
 function fxClose(){if(!fxs.open)return;fxs.open=false;fxs.editId=null;FXP_.classList.remove('show');$('#tab-fx').classList.remove('on');$('#tab-canvas').classList.add('on');cancelAnimationFrame(fxs.raf);draw()}
@@ -2782,30 +2819,36 @@ $('#fxc').addEventListener('change',e=>{
 });
 $('#fxc').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.emsel!=null){fxSelect(+b.dataset.emsel);return}
+  if(b.dataset.emmute!=null){const e=fxs.em[+b.dataset.emmute];e.mute=!e.mute;fxRefresh();return}
+  if(b.dataset.emup!=null||b.dataset.emdown!=null){const i=+(b.dataset.emup??b.dataset.emdown),j=b.dataset.emup!=null?i-1:i+1;if(j<0||j>=fxs.em.length)return;const cur=fxs.p;[fxs.em[i],fxs.em[j]]=[fxs.em[j],fxs.em[i]];fxs.sel=fxs.em.indexOf(cur);fxRefresh();return}
+  if(b.dataset.emdel!=null){if(fxs.em.length<2)return;fxs.em.splice(+b.dataset.emdel,1);fxSelect(Math.min(fxs.sel,fxs.em.length-1));return}
+  if(b.id==='fxaddem'){if(fxs.em.length>=8)return toast('8 parts is the most for one effect','warn');const rk=$('#fxnewrec').value;fxs.em.push({...FXDEF,recipe:rk});fxs.sel=fxs.em.length-1;fxs.p=fxs.em[fxs.sel];fxs.sprPicked=false;fxRoll(rk);return}
+  if(b.id==='fxrollall'){fxRollAll();return}
   if(b.dataset.lk){const k=b.dataset.lk;fxs.locks.has(k)?fxs.locks.delete(k):fxs.locks.add(k);fxRefresh();return}
   if(b.dataset.spr){const s=b.dataset.spr;if(s==='layer')fxSprFromLayer();else if(s==='upload')$('#fxfile').click();else fxPick('builtin:'+s);return}
   if(b.id==='fxroll'){fxRoll($('#fxrec').value);return}
   if(b.id==='fxmut'){fxMutate();return}
-  if(b.id==='fxfav'){const n=fxs.favs.filter(f=>f.p.recipe===fxs.p.recipe).length+1;fxs.favs.unshift({name:fxs.p.recipe+' '+n,p:fxClean(fxs.p)});fxs.favs.length=Math.min(fxs.favs.length,24);fxSaveFavs();fxFavsDraw();toast('kept in favourites','good');return}
-  if(b.dataset.fav!=null){const f=fxs.favs[+b.dataset.fav];if(f){fxs.p=fxClean(f.p);fxs.sprPicked=true;fxRefresh()}return}
+  if(b.id==='fxfav'){const n=fxs.favs.filter(f=>f.name.startsWith(fxs.em.length>1?'stack':fxs.p.recipe)).length+1;fxs.favs.unshift({name:(fxs.em.length>1?'stack':fxs.p.recipe)+' '+n,em:fxCleanFx({emitters:fxs.em}).emitters});fxs.favs.length=Math.min(fxs.favs.length,24);fxSaveFavs();fxFavsDraw();toast('kept in favourites','good');return}
+  if(b.dataset.fav!=null){const f=fxs.favs[+b.dataset.fav];if(f){fxs.em=fxCleanFx({emitters:f.em}).emitters;fxs.sel=0;fxs.p=fxs.em[0];fxs.sprPicked=true;fxRefresh()}return}
   if(b.dataset.favdel!=null){fxs.favs.splice(+b.dataset.favdel,1);fxSaveFavs();fxFavsDraw();return}
   if(b.id==='fxadd'){fxAddLayer();return}
   if(b.id==='fxupd'){fxUpdateLayer();return}
 });
 $('#fx-replay').onclick=()=>fxRestart();
-$('#tab-fx').onclick=()=>{if(fxs.open)fxClose();else{fxs.editId=null;fxs.locks.clear();fxOpen()}};
+$('#tab-fx').onclick=()=>{if(fxs.open)fxClose();else{fxs.editId=null;fxs.locks.clear();fxs.em=[];fxOpen()}};
 $('#tab-canvas').onclick=fxClose;
 $('#rail').addEventListener('click',()=>fxClose());
 for(const ev of ['pointerdown','pointermove','pointerup','wheel','keydown','keyup','dblclick','contextmenu'])FXP_.addEventListener(ev,e=>e.stopPropagation());
 /* ----- effect layers on the canvas ----- */
 async function fxAddLayer(){
-  if(!fxs.p)return;setBusy(1);
+  if(!fxs.em.length)return;setBusy(1);
   try{
-    const p=fxClean(fxs.p),{cv,W,H}=await fxPoster(p),blob=await toBlobAsync(cv),id=newId(),m=maskFrom(cv);p.bs=blob.size;
+    const p=fxCleanFx({emitters:fxs.em}),{cv,W,H}=await fxPoster(p),blob=await toBlobAsync(cv),id=newId(),m=maskFrom(cv);p.bs=blob.size;
     store.set(id,{blob,pv:cv,mask:m.mask,mw:m.mw,mh:m.mh,w:W,h:H});
-    const c=toScene({x:cw/2,y:ch/2}),cx=clamp(c.x,0,state.W),cy=clamp(c.y,0,state.H),n=state.layers.filter(l=>l.fx&&l.fx.recipe===p.recipe).length+1,i=state.layers.findIndex(l=>l.id===state.sel);
+    const c=toScene({x:cw/2,y:ch/2}),cx=clamp(c.x,0,state.W),cy=clamp(c.y,0,state.H),nm=p.emitters.length>1?'stack':p.emitters[0].recipe,n=state.layers.filter(l=>l.fx&&l.name.startsWith('fx '+nm+' ')).length+1,i=state.layers.findIndex(l=>l.id===state.sel);
     fxClose();
-    edit(()=>{state.layers.splice(i<0?state.layers.length:i+1,0,{id,name:'fx '+p.recipe+' '+n,x:Math.round(cx-W/2),y:Math.round(cy-H/2),w:W,h:H,scale:1,rot:0,px:.5,py:.5,op:1,vis:true,lock:false,ai:false,fx:p});state.sel=id});
+    edit(()=>{state.layers.splice(i<0?state.layers.length:i+1,0,{id,name:'fx '+nm+' '+n,x:Math.round(cx-W/2),y:Math.round(cy-H/2),w:W,h:H,scale:1,rot:0,px:.5,py:.5,op:1,vis:true,lock:false,ai:false,fx:p});state.sel=id});
     setTool('move');setTimeout(()=>{const row=$(`.row[data-id="${id}"]`,LP);if(row)row.scrollIntoView({block:'nearest'})},60);
     toast('effect added · press ▶ play in the layer panel (under its name) to see it in the scene','good');
   }catch(err){console.error(err);toast('could not add the effect: '+err.message,'err')}finally{setBusy(-1)}
@@ -2814,7 +2857,7 @@ async function fxUpdateLayer(){
   const id=fxs.editId,L=state.layers.find(l=>l.id===id),r=store.get(id);if(!L||!r)return toast('that effect layer is gone','warn');
   setBusy(1);
   try{
-    fxPlaying.delete(id);const meta=snapshot(),old=r.blob,p=fxClean(fxs.p),{cv,W,H}=await fxPoster(p),blob=await toBlobAsync(cv);p.bs=blob.size;
+    fxPlaying.delete(id);const meta=snapshot(),old=r.blob,p=fxCleanFx({emitters:fxs.em}),{cv,W,H}=await fxPoster(p),blob=await toBlobAsync(cv);p.bs=blob.size;
     L.fx=p;shapePlace(L,W,H);r.pv=cv;r.w=W;r.h=H;Object.assign(r,maskFrom(cv));r.blob=blob;r.tc=null;tcache.clear();savedBlobs.delete(id);
     U.push({px:id,blob:old,meta});if(U.length>100)U.shift();R.length=0;lastStruct='';state.sel=id;fxClose();changed();toast('effect layer updated (ctrl+z undoes it)','good');
   }catch(err){console.error(err);toast('could not update: '+err.message,'err')}finally{setBusy(-1)}
@@ -2823,40 +2866,46 @@ var fxPlaying=new Map();
 async function fxPlay(id){
   const L=state.layers.find(l=>l.id===id);if(!L||!fxOk(L))return;
   if(fxPlaying.has(id)){fxPlaying.delete(id);fxPlayBtn();draw();return}
-  const spr=await fxSprite(L.fx.spr);fxPlaying.set(id,{sys:new FXE.System(L.fx,spr,L.fx.seed),last:performance.now()});fxPlayBtn();draw();
+  const sp=await fxSprites(L.fx.emitters);fxPlaying.set(id,{sys:new FXE.Effect(L.fx,sp),last:performance.now()});fxPlayBtn();draw();
 }
 function fxPlayBtn(){const L=sel(),b=$('[data-fxact="play"]',LP);if(b&&L)b.textContent=fxPlaying.has(L.id)?'■ stop':'▶ play'}
 function fxPaintLayer(L){ // called inside paint() with the layer's transform applied: origin of the effect = middle of the layer
   const s=fxPlaying.get(L.id),now=performance.now();s.sys.update((now-s.last)/1000);s.last=now;s.sys.draw(ctx,L.w/2,L.h/2,1,L.op);
-  if(s.sys.done&&L.fx.mode!=='loop')setTimeout(()=>{fxPlaying.delete(L.id);fxPlayBtn();draw()},250);
+  if(s.sys.done)setTimeout(()=>{fxPlaying.delete(L.id);fxPlayBtn();draw()},250);
   draw();
 }
 function fxInspector(L){
-  if(!L.fx||!fxOk(L))return '';const f=L.fx;
-  return `<div class="shbox"><div class="line"><label>effect</label><span class="dim" style="flex:1">${esc(f.recipe)} · ${f.mode}</span><button class="sm" data-fxact="play" title="${f.mode==='loop'?'play the loop (press again to stop)':'play the effect once on the scene'}">${fxPlaying&&fxPlaying.has(L.id)?'■ stop':'▶ play'}</button><button class="sm" data-fxact="edit" title="open this effect in the fx tab to roll or change it">edit</button></div></div>`;
+  if(!L.fx||!fxOk(L))return '';const f=L.fx,em=f.emitters,loop=em.some(e=>!e.mute&&e.mode==='loop');
+  return `<div class="shbox"><div class="line"><label>effect</label><span class="dim" style="flex:1">${em.length>1?em.length+' parts: ':''}${esc(em.map(e=>e.recipe).join(' + '))}</span><button class="sm" data-fxact="play" title="${loop?'play it (it loops: press again to stop)':'play the effect once on the scene'}">${fxPlaying&&fxPlaying.has(L.id)?'■ stop':'▶ play'}</button><button class="sm" data-fxact="edit" title="open this effect in the fx tab to roll or change it">edit</button></div></div>`;
 }
 LP.addEventListener('click',e=>{
   const b=e.target.closest('[data-fxact]');if(!b)return;const L=sel();if(!L||!fxOk(L))return;
   if(b.dataset.fxact==='play')fxPlay(L.id);
-  else{fxs.editId=L.id;fxs.sprPicked=true;fxs.locks.clear();fxOpen(L.fx)}
+  else{fxs.editId=L.id;fxs.locks.clear();fxOpen(L.fx)}
 });
 /* ----- saving: scene.json carries the effect, the zip carries the sprite, and the game gets fx.json + particles.js + a README ----- */
-const fxSpriteFile=(l,i)=>l.fx.spr.startsWith('builtin:')?'fx-sprites/'+l.fx.spr.slice(8)+'.png':'fx-sprites/'+slug(l.name)+'-'+i+'.png';
-function fxPublic(l,i){const {bs,spr,...o}=l.fx;return {...o,effect:l.name,sprite:fxSpriteFile(l,i),...(spr.startsWith('builtin:')?{builtin:spr.slice(8)}:{})}}
+const fxSprFile=(spr,tag)=>spr.startsWith('builtin:')?'fx-sprites/'+spr.slice(8)+'.png':'fx-sprites/'+tag+'.png';
+const fxEmPublic=(e,tag)=>{const {spr,...o}=e;return {...o,sprite:fxSprFile(spr,tag),...(spr.startsWith('builtin:')?{builtin:spr.slice(8)}:{})}};
+function fxPublic(l,i){return {effect:l.name,emitters:l.fx.emitters.map((e,k)=>fxEmPublic(e,slug(l.name)+'-'+i+'-'+k))}}
 async function fxSpriteBytes(spr){const c=await fxSprite(spr),b=await toBlobAsync(c);return new Uint8Array(await b.arrayBuffer())}
 const fxToDataURL=u8=>new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(new Blob([u8],{type:'image/png'}))});
 async function fxLoad(o,files,bs){
-  let spr='builtin:soft';
-  if(o.builtin&&FXSPRN.includes(o.builtin))spr='builtin:'+o.builtin;
-  else if(o.sprite){const base=String(o.sprite).replace(/^.*\//,''),fk=[...files.keys()].find(k=>k.replace(/^.*\//,'')===base);if(fk)spr=await fxToDataURL(files.get(fk))}
-  return fxClean({...o,spr},bs);
+  const out=[];
+  for(const e of (Array.isArray(o.emitters)&&o.emitters.length?o.emitters:[o]).slice(0,8)){
+    let spr='builtin:soft';
+    if(e.builtin&&FXSPRN.includes(e.builtin))spr='builtin:'+e.builtin;
+    else if(e.sprite){const base=String(e.sprite).replace(/^.*\//,''),fk=[...files.keys()].find(k=>k.replace(/^.*\//,'')===base);if(fk)spr=await fxToDataURL(files.get(fk))}
+    out.push({...e,spr});
+  }
+  return fxCleanFx({emitters:out},bs);
 }
+function fxNormLayer(l){return l.fx?{...l,fx:fxCleanFx(l.fx.emitters?l.fx:{emitters:[l.fx]},l.fx.bs)}:l} // old saves (one flat effect) become a stack of one
 async function fxExportEntries(list){ // extra zip entries for the game; [] when the scene has no effects
   const fl=list.map((l,i)=>[l,i]).filter(([l])=>l.fx&&fxOk(l)),out=[],seen=new Set();
   if(!fl.length&&!fxs.favs.length)return out;
   const effects={},enc=new TextEncoder();
-  for(const [l,i] of fl){const f=fxSpriteFile(l,i);effects[l.name]=(({effect,...o})=>o)(fxPublic(l,i));if(!seen.has(f)){seen.add(f);out.push({name:f,data:await fxSpriteBytes(l.fx.spr)})}}
-  fxs.favs.forEach((fv,k)=>{const nm='fav '+fv.name,{bs,spr,...o}=fv.p,f=spr.startsWith('builtin:')?'fx-sprites/'+spr.slice(8)+'.png':'fx-sprites/fav-'+k+'.png';effects[nm]={...o,sprite:f,...(spr.startsWith('builtin:')?{builtin:spr.slice(8)}:{})};if(!seen.has(f)){seen.add(f);out.push({sp:spr,name:f})}});
+  for(const [l,i] of fl){const pub=fxPublic(l,i);effects[l.name]={emitters:pub.emitters};for(let k=0;k<pub.emitters.length;k++){const f=pub.emitters[k].sprite;if(!seen.has(f)){seen.add(f);out.push({name:f,data:await fxSpriteBytes(l.fx.emitters[k].spr)})}}}
+  fxs.favs.forEach((fv,j)=>{const nm='fav '+fv.name,em=fv.em.map((e,k)=>fxEmPublic(e,'fav-'+j+'-'+k));effects[nm]={emitters:em};em.forEach((pe,k)=>{if(!seen.has(pe.sprite)){seen.add(pe.sprite);out.push({sp:fv.em[k].spr,name:pe.sprite})}})});
   for(const e of out)if(e.sp){e.data=await fxSpriteBytes(e.sp);delete e.sp}
   out.push({name:'fx.json',data:enc.encode(JSON.stringify({format:'layerforge-fx',version:1,note:'one entry per effect; see FX-README.md',effects},null,2))});
   out.push({name:'particles.js',data:enc.encode(FX_RUNTIME())});
@@ -2868,33 +2917,32 @@ const FX_README=`# Layerforge FX: particle effects for the game
 
 This folder was exported from Layerforge. Effects are made in the app (roll / lock / mutate until they feel right) and saved as plain settings, so the game replays them with a small runtime.
 
+An effect is a STACK of one or more parts ("emitters") that play together, e.g. an explosion = flash + fire + smoke + sparks. Each part has its own settings, sprite, an optional start delay and plays in list order (first = drawn underneath).
+
 ## Files
-- \`fx.json\`: every effect, by name: \`{ "format":"layerforge-fx", "effects": { "<name>": { ...settings, "sprite":"fx-sprites/x.png" } } }\`. Effects named \`fav ...\` are the app's saved favourites (not placed in the scene).
+- \`fx.json\`: every effect, by name: \`{ "format":"layerforge-fx", "effects": { "<name>": { "emitters":[ { ...settings, "sprite":"fx-sprites/x.png" }, ... ] } } }\`. Effects named \`fav ...\` are the app's saved favourites (not placed in the scene).
 - \`fx-sprites/*.png\`: the particle pictures (white soft shapes, tinted by the runtime from \`color0\` to \`color1\`).
 - \`particles.js\`: the runtime. Plain script, sets \`LayerforgeFX\` (also usable with \`require\`). Needs a browser (it makes canvases).
-- \`scene.json\`: a layer with an \`fx\` block is an effect placed in the scene. The emitter is the CENTRE of that layer's rectangle: x + w/2, y + h/2 (default pivot), and the layer's \`scale\`, \`rotation\` and \`opacity\` apply (scale the drawing, rotate around the emitter). Its PNG is only a still preview: do not draw it in the game, play the effect instead.
+- \`scene.json\`: a layer with an \`fx\` block is an effect placed in the scene (same \`emitters\` list). The emitter origin is the CENTRE of that layer's rectangle: x + w/2, y + h/2 (default pivot), and the layer's \`scale\`, \`rotation\` and \`opacity\` apply (scale the drawing, rotate around the origin). Its PNG is only a still preview: do not draw it in the game, play the effect instead.
 
 ## Use it
 \`\`\`js
 const fx = await (await fetch('fx.json')).json();
-const e = fx.effects['fx explosion 1'];                // or any name
-const img = new Image(); img.src = e.sprite; await img.decode();
-const boom = new LayerforgeFX.System(e, img, 1234);     // 3rd argument = random seed (omit to use e.seed)
+const boom = await LayerforgeFX.load(fx.effects['fx stack 1'], '');  // loads every sprite (second argument = folder prefix if the files are elsewhere)
 // every frame:
 boom.update(dt);                                        // dt in seconds
-boom.draw(ctx, x, y, 1, 1);                             // ctx, emitter x, y, scale, opacity
-if (boom.done) { /* burst finished: remove it */ }      // loops (mode "loop") never finish; stop drawing them yourself
+boom.draw(ctx, x, y, 1, 1);                             // ctx, origin x, y, scale, opacity
+if (boom.done) { /* every part has finished: remove it */ }   // looping parts never finish: stop drawing them yourself
 \`\`\`
-For a new play of the same effect, make a new \`System\` (or call \`boom.reset()\`). Use a different seed for variety.
+To play the same effect again, call \`boom.reset()\` (or load it again). For a different scatter each time, pass a seed: \`new LayerforgeFX.Effect(effect, spriteImages, seed)\` (spriteImages = one loaded Image per emitter, in order). A single part can also be played alone with \`new LayerforgeFX.System(emitter, image, seed)\` (same update / draw / done).
 
-## Settings (in each effect)
-- \`mode\`: "burst" (emits \`count\` particles over \`burstTime\` seconds, then ends) or "loop" (emits \`rate\` per second forever)
+## Settings (in each emitter)
+- \`mode\`: "burst" (emits \`count\` particles over \`burstTime\` seconds, then ends) or "loop" (emits \`rate\` per second forever); \`delay\` seconds before this part starts; \`mute\` true = skipped
 - \`lifeMin/lifeMax\` seconds; \`speedMin/speedMax\` pixels per second; \`angle\` degrees (0 = right, -90 = up, 90 = down) and \`spread\` degrees around it (360 = every direction); \`gravity\` pixels/second² (positive = down); \`drag\` per second
 - \`sizeMin/sizeMax\` pixels (width at birth); \`endScale\` size multiplier at death; \`alpha0\` to \`alpha1\` fade over life; \`spinMin/spinMax\` degrees per second; \`face\` true = turn to face the direction of travel; \`radius\` = emitter size (particles start inside this circle)
 - \`color0\` to \`color1\` colour over life (\`tint\` false = use the sprite's own colours); \`multi\` = a list of colours, each particle picks one; \`blend\` "add" (glow, drawn with lighter) or "normal"
 - \`seed\`: random scatter. Pixels are scene pixels (the scene is usually 3840 x 2160); scale them with your draw scale.
 `;
-
 window.__lf={fxs,fxRoll,fxMutate,fxOpen,fxClose,fxAddLayer,fxUpdateLayer,fxPlay,fxPlaying,fxOk,fxPoster,FXE,FXR,fxClean,fxExportEntries,fxLoad,shapeCreate,shapeLive,shapeCommit,shapeOk,renderShape,get sdrag(){return sdrag},cornersFlat,autoWandLayer,autoBgSel,planParse,openPlan,finishPlans,cropRef,syncChildren,tcache,finishPick,startPick,detachLayer,get pickPar(){return pickPar},dupLayer,makeVariants,feelPreview,feelApply,feelCancel,get fs(){return fs},get gb(){return gb},set gb(v){gb=v;gbBtn();draw()},gbToggle,gbHit,gbPts,enqueueUpscale,flattenScene,mergeLayers,selIds,msel,rdCut,get rd(){return rd},rdPaint,enqueueRedraw,getRefs,composePrompt,setRef,getRefs,cutRegion,get cs(){return cs},applyCut,state,store,view,brush,applyWand,cfg,jobs,enqueue,setTool,addBlank,importFiles,saveZip,zipBuild,zipRead,edit,undo,redo,fit}; // handy for debugging
 (async()=>{
   $('#sname').value=state.name;$('#sname').style.width='10ch';
