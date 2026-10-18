@@ -73,6 +73,22 @@ body.noside #side{display:none}
 #zoombar .pct{min-width:64px;text-align:center;color:var(--dim)}
 #tbar{position:absolute;left:14px;top:14px;display:none;align-items:center;gap:14px;padding:4px 14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:48px}
 #tbar.show{display:flex}
+#fxp{position:absolute;inset:0;display:none;background:var(--bg);z-index:30;grid-template-columns:minmax(0,1fr) 370px;min-height:0}
+#fxp.show{display:grid}
+#fxv{position:relative;min-width:0;min-height:0;border-right:1px solid var(--line)}
+#fxcv{position:absolute;inset:0;width:100%;height:100%;display:block}
+#fxvb{position:absolute;left:12px;top:12px;display:flex;gap:12px;align-items:center}
+#fxc{overflow:auto;padding:10px 14px 24px;min-height:0}
+.fxsec{margin-bottom:14px}.fxh{color:var(--clay-text);margin:6px 0 8px}
+.fxspr{display:flex;flex-wrap:wrap;gap:6px}.fxspr .sm{height:34px;padding:0 10px;border:1px solid var(--line)}.fxspr .sm.on{border-color:var(--clay);color:var(--clay-text)}
+.fxbig{display:flex;gap:8px;align-items:center;margin-bottom:8px}.fxbig select{flex:1}.fxbig input[type=range]{flex:1;min-width:0}
+.fxrow{display:flex;align-items:center;gap:8px;margin:3px 0;min-height:32px}.fxrow[hidden]{display:none}
+.fxrow>label{width:92px;flex-shrink:0;color:var(--dim)}.fxrow input[type=range]{flex:1;min-width:0}.fxrow .fxv{width:62px;text-align:right;flex-shrink:0}
+.fxrow select{flex:1;min-width:0}.fxcols{flex:1;display:flex;align-items:center;gap:8px}.fxrow .ck{width:auto;display:flex;gap:6px;align-items:center;color:var(--text)}
+.lk{width:30px;height:30px;border:1px solid var(--line);border-radius:6px;color:var(--dim);flex-shrink:0}.lk.on{color:var(--clay-text);border-color:var(--clay)}
+.fxfavs{display:flex;flex-wrap:wrap;gap:6px}.fxfav{display:inline-flex}.fxfav .sm{height:30px;padding:0 9px;border:1px solid var(--line)}
+.fxact{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+@media (max-width:900px){#fxp.show{grid-template-columns:1fr;grid-template-rows:42% 1fr}#fxv{border-right:0;border-bottom:1px solid var(--line)}}
 #sbar{position:absolute;left:14px;top:14px;display:none;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:6px 14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:48px;max-width:calc(100% - 28px)}
 #sbar.show{display:flex}.stypes{display:flex;gap:6px}.stypes .sm{min-width:40px;height:36px;border:1px solid var(--line);border-radius:6px;font-size:16px}.stypes .sm.on{border-color:var(--clay);color:var(--clay-text)}
 .insp .shbox{display:grid;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--line)}.insp select.shsel{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px;padding:4px 6px}.insp .shw{width:64px;min-width:0;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;font:inherit;padding:6px}
@@ -218,6 +234,7 @@ select option:checked,select option:hover{background:#3a2a22;color:#e9a98f}
     <nav class="tabs">
       <button class="tab on" id="tab-canvas">canvas</button>
       <button class="tab" disabled title="reference images arrive in a later step">refs</button>
+      <button class="tab" id="tab-fx" title="particle effects: roll until it feels right, then put it on the canvas">fx</button>
       <button class="tab" id="tab-export">export</button>
     </nav>
     <div class="spacer"></div>
@@ -244,6 +261,7 @@ select option:checked,select option:hover{background:#3a2a22;color:#e9a98f}
 
   <main id="stage">
     <canvas id="cv"></canvas>
+    <div id="fxp"><div id="fxv"><canvas id="fxcv"></canvas><div id="fxvb"><button class="sm" id="fx-replay" title="play it again from the start">▶ replay</button><span class="dim">the cross is where the effect starts</span></div></div><div id="fxc"></div></div>
     <div id="sbar"><span class="tb-t">shape</span>
       <span class="stypes" id="stypes"><button class="sm on" data-st="circle" title="circle / oval">●</button><button class="sm" data-st="square" title="square / rectangle">■</button><button class="sm" data-st="hexagon" title="hexagon">⬢</button><button class="sm" data-st="star" title="star">★</button></span>
       <label class="tb-l">fill<input type="color" id="scol" value="#D97757" aria-label="shape colour"></label>
@@ -502,7 +520,7 @@ function paint(){
   for(const L of state.layers){
     if(!L.vis)continue;const r=store.get(L.id);if(!r)continue;
     ctx.save();
-    try{ctx.globalAlpha=L.op;applyM(ctx,L);if(!r.pv||!r.pv.width||!r.pv.height)throw new Error('empty picture');ctx.drawImage(tintedSurface(L,r,r.pv),0,0,L.w,L.h)}
+    try{ctx.globalAlpha=L.op;applyM(ctx,L);if(!r.pv||!r.pv.width||!r.pv.height)throw new Error('empty picture');if(fxPlaying&&fxPlaying.size&&fxPlaying.has(L.id))fxPaintLayer(L);else ctx.drawImage(tintedSurface(L,r,r.pv),0,0,L.w,L.h)}
     catch(err){drawProblem(L,err)}
     finally{ctx.restore()}
   }
@@ -572,7 +590,7 @@ function edit(fn,key){
 
 /* ---------- layer panel ---------- */
 const LP=$('#layers');let lastStruct='';
-function structKey(){return state.layers.map(l=>[l.id,l.name,l.vis?1:0,l.lock?1:0,l.ai?1:0,l.par||'',l.shape?l.shape.type+(shapeOk(l)?'+':'-'):''].join(':')).join('|')+'#'+state.sel+'#'+[...msel].join(',')+'#'+jobs.map(j=>j.id+j.status).join(',')}
+function structKey(){return state.layers.map(l=>[l.id,l.name,l.vis?1:0,l.lock?1:0,l.ai?1:0,l.par||'',l.shape?l.shape.type+(shapeOk(l)?'+':'-'):'',l.fx?(fxOk(l)?'f+':'f-'):''].join(':')).join('|')+'#'+state.sel+'#'+[...msel].join(',')+'#'+jobs.map(j=>j.id+j.status).join(',')}
 function drawThumb(c,r,L){
   const t=c.getContext('2d');t.clearRect(0,0,c.width,c.height);
   if(!r||!r.pv||!r.pv.width||!r.pv.height)return;
@@ -603,7 +621,7 @@ function renderLayers(){
     if(r){drawThumb($('canvas',row),r,L);row.dataset.ts=tintSig(L)}
     if(isSel){
       const ins=document.createElement('div');ins.className='insp';
-      ins.innerHTML=shapeInspector(L)+`<div class="line"><label>opacity</label><input type="range" min="0" max="100" step="1" data-f="op" aria-label="opacity"><span class="pv" data-pv="op"></span></div>
+      ins.innerHTML=shapeInspector(L)+fxInspector(L)+`<div class="line"><label>opacity</label><input type="range" min="0" max="100" step="1" data-f="op" aria-label="opacity"><span class="pv" data-pv="op"></span></div>
       <div class="line"><label>tint</label><input type="color" class="tcol" data-tint="color" value="#ffffff" aria-label="tint colour" title="recolour this layer (works best on white or light grey art)"><select class="tmode" data-tint="mode" aria-label="tint mode" title="multiply keeps shading and outlines; colour keeps brightness and swaps the hue"><option value="multiply">multiply</option><option value="color">colour</option></select><button class="ib sm" data-tint="clear" title="remove the tint" aria-label="remove tint">${ic('x')}</button></div>
       <div class="line"><label>mix</label><input type="range" min="0" max="100" step="1" data-tint="amt" aria-label="tint strength"></div>
       <div class="line tdots"><label></label>${copyCols.map((c,i)=>`<input type="color" class="tdot" data-tint="swatch" data-i="${i}" value="${c}" title="tap to pick this colour (it is used by the copies button; right-click or double-tap a swatch to tint this layer with it)" aria-label="copy colour ${i+1}">`).join('')}<button class="sm" data-tint="addcol" title="add another colour" aria-label="add a colour">＋</button>${copyCols.length>1?'<button class="sm" data-tint="delcol" title="remove the last colour" aria-label="remove a colour">−</button>':''}<button class="sm" data-tint="variants" title="make a copy of this layer in each of these colours">${copyCols.length} cop${copyCols.length>1?'ies':'y'}</button></div>
@@ -2258,7 +2276,7 @@ function sceneJSON(list=state.layers,skipped){
   return {format:'layerforge-scene',version:1,name:state.name,width:state.W,height:state.H,
     notes:'layers are listed bottom to top (z = stacking order). parent (optional) = the file of the layer this one is attached to (eyes and mouth on an enemy, say): when the parent moves, scales or turns, this layer should follow it; the x / y / scale / rotation given here are its resting pose. tint (optional) recolours a layer in code: mode multiply = canvas multiply blend of color over the picture (keeps shading and outlines), mode color = canvas color blend (keeps brightness, swaps hue); amount 0-1 mixes the tinted picture over the original. x,y = top-left of the unscaled layer in scene pixels. scale (1 = 100%) and rotation (degrees, clockwise) turn the layer around pivot (0-1 across the layer, can fall outside it).',
     ...(skipped?{skipped}:{}),
-    layers:list.map((l,i)=>({...parentInfo(l,list),name:l.name,file:fileFor(l,i),z:i,x:l.x,y:l.y,w:l.w,h:l.h,scale:l.scale,rotation:l.rot,pivot:{x:l.px,y:l.py},opacity:l.op,visible:l.vis,locked:l.lock,ai:l.ai,...(l.tint?{tint:{color:l.tint,mode:l.tm||'multiply',amount:l.ta==null?1:l.ta}}:{}),...(l.shape&&shapeOk(l)?{shape:shapePublic(l.shape)}:{})}))};
+    layers:list.map((l,i)=>({...parentInfo(l,list),name:l.name,file:fileFor(l,i),z:i,x:l.x,y:l.y,w:l.w,h:l.h,scale:l.scale,rotation:l.rot,pivot:{x:l.px,y:l.py},opacity:l.op,visible:l.vis,locked:l.lock,ai:l.ai,...(l.tint?{tint:{color:l.tint,mode:l.tm||'multiply',amount:l.ta==null?1:l.ta}}:{}),...(l.shape&&shapeOk(l)?{shape:shapePublic(l.shape)}:{}),...(l.fx&&fxOk(l)?{fx:fxPublic(l,i)}:{})}))};
 }
 const TOUCH=('ontouchstart' in window)&&navigator.maxTouchPoints>1;
 let zipNm='';try{zipNm=localStorage.getItem('lf-zipnm')||''}catch(_){}
@@ -2277,6 +2295,7 @@ async function saveZip(game){
     }else game=false;
     const enc=new TextEncoder(),entries=[{name:'scene.json',data:enc.encode(JSON.stringify(sceneJSON(list,skipped&&skipped.length?skipped:undefined),null,2))}];
     for(let i=0;i<list.length;i++){const l=list[i];entries.push({name:fileFor(l,i),data:new Uint8Array(await store.get(l.id).blob.arrayBuffer())})}
+    for(const e of await fxExportEntries(list))entries.push(e);
     const fname=(!game&&zipNm)||slug(state.name)+(game?'-game':'')+'.zip',z=zipBuild(entries);
     let how='saved';
     if(!game&&TOUCH&&navigator.canShare&&navigator.share){
@@ -2306,7 +2325,7 @@ async function openZip(file){
         const fk=[...files.keys()].find(k=>k.replace(/^.*\//,'')===String(m.file||'').replace(/^.*\//,''));
         if(!fk){toast('missing file for layer '+m.name,'warn');continue}
         const r=await makeRec(mk(files.get(fk)),{trim:false});if(!r)continue;const id=newId();store.set(id,r.rec);
-        state.layers.push({id,name:m.name||niceName(fk),x:+m.x||0,y:+m.y||0,w:r.rec.w,h:r.rec.h,scale:m.scale??1,rot:m.rotation??0,px:m.pivot?.x??.5,py:m.pivot?.y??.5,op:m.opacity??1,vis:m.visible!==false,lock:!!m.locked,ai:!!m.ai,...(m.tint&&m.tint.color?{tint:String(m.tint.color),tm:m.tint.mode==='color'?'color':'multiply',ta:m.tint.amount==null?1:+m.tint.amount}:{}),...(m.shape&&m.shape.type?{shape:shapeClean(m.shape,r.rec.blob.size)}:{})});
+        state.layers.push({id,name:m.name||niceName(fk),x:+m.x||0,y:+m.y||0,w:r.rec.w,h:r.rec.h,scale:m.scale??1,rot:m.rotation??0,px:m.pivot?.x??.5,py:m.pivot?.y??.5,op:m.opacity??1,vis:m.visible!==false,lock:!!m.locked,ai:!!m.ai,...(m.tint&&m.tint.color?{tint:String(m.tint.color),tm:m.tint.mode==='color'?'color':'multiply',ta:m.tint.amount==null?1:+m.tint.amount}:{}),...(m.shape&&m.shape.type?{shape:shapeClean(m.shape,r.rec.blob.size)}:{}),...(m.fx&&typeof m.fx==='object'?{fx:await fxLoad(m.fx,files,r.rec.blob.size)}:{})});
         byFile.set(String(m.file||'').replace(/^.*\//,''),id);if(m.parent)wantPar.push([id,String(m.parent).replace(/^.*\//,'')]);
       }
       for(const [cid,pf] of wantPar){const pid=byFile.get(pf);const C=state.layers.find(l=>l.id===cid);if(C&&pid&&pid!==cid)C.par=pid}
@@ -2550,7 +2569,333 @@ LP.addEventListener('click',e=>{
   tcache.clear();shapeCommit();
 });
 
-window.__lf={shapeCreate,shapeLive,shapeCommit,shapeOk,renderShape,get sdrag(){return sdrag},cornersFlat,autoWandLayer,autoBgSel,planParse,openPlan,finishPlans,cropRef,syncChildren,tcache,finishPick,startPick,detachLayer,get pickPar(){return pickPar},dupLayer,makeVariants,feelPreview,feelApply,feelCancel,get fs(){return fs},get gb(){return gb},set gb(v){gb=v;gbBtn();draw()},gbToggle,gbHit,gbPts,enqueueUpscale,flattenScene,mergeLayers,selIds,msel,rdCut,get rd(){return rd},rdPaint,enqueueRedraw,getRefs,composePrompt,setRef,getRefs,cutRegion,get cs(){return cs},applyCut,state,store,view,brush,applyWand,cfg,jobs,enqueue,setTool,addBlank,importFiles,saveZip,zipBuild,zipRead,edit,undo,redo,fit}; // handy for debugging
+/* ---------- fx: particle generator (roll, lock, mutate), effect layers with a play button, export for the game ---------- */
+// The engine is ONE function: it runs the preview here and its source is exported as particles.js, so the game plays exactly what you saw.
+function lfFxEngine(){
+  function rng(seed){var a=(seed>>>0)||1;return function(){a=(a+0x6D2B79F5)>>>0;var t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296}}
+  function hex(c){c=String(c||'#ffffff').replace('#','');if(c.length===3)c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];return[parseInt(c.substr(0,2),16)||0,parseInt(c.substr(2,2),16)||0,parseInt(c.substr(4,2),16)||0]}
+  function lerp(a,b,t){return a+(b-a)*t}
+  function mk(w,h){var c=document.createElement('canvas');c.width=w;c.height=h;return c}
+  function tinted(sprite,col){var w=sprite.width,h=sprite.height,c=mk(w,h),x=c.getContext('2d');x.drawImage(sprite,0,0);x.globalCompositeOperation='multiply';x.fillStyle='rgb('+(col[0]|0)+','+(col[1]|0)+','+(col[2]|0)+')';x.fillRect(0,0,w,h);x.globalCompositeOperation='destination-in';x.drawImage(sprite,0,0);return c}
+  var STEPS=14;
+  function ramp(p,sprite){
+    if(!sprite)return[];if(p.tint===false)return[sprite];var out=[],i;
+    if(p.multi&&p.multi.length){for(i=0;i<p.multi.length;i++)out.push(tinted(sprite,hex(p.multi[i])));return out}
+    var a=hex(p.color0),b=hex(p.color1);
+    for(i=0;i<STEPS;i++){var t=i/(STEPS-1);out.push(tinted(sprite,[lerp(a[0],b[0],t),lerp(a[1],b[1],t),lerp(a[2],b[2],t)]))}
+    return out;
+  }
+  function System(p,sprite,seed){this.p=p;this.sprite=sprite;this.seed=seed==null?(p.seed||1):seed;this.ramp=ramp(p,sprite);this.reset()}
+  System.prototype.reset=function(){this.r=rng(this.seed);this.parts=[];this.t=0;this.acc=0;this.emitted=0};
+  System.prototype.spawn=function(){
+    var p=this.p,r=this.r,a=(p.angle+(r()-.5)*p.spread)*Math.PI/180,sp=lerp(p.speedMin,p.speedMax,r()),ea=r()*6.2832,er=p.radius*Math.sqrt(r()),life=lerp(p.lifeMin,p.lifeMax,r());
+    this.parts.push({x:Math.cos(ea)*er,y:Math.sin(ea)*er,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,age:0,life:Math.max(.05,life),size:lerp(p.sizeMin,p.sizeMax,r()),rot:r()*6.2832,spin:lerp(p.spinMin,p.spinMax,r())*Math.PI/180,ci:Math.floor(r()*1e6)});
+  };
+  System.prototype.step=function(h){
+    var p=this.p,i;
+    if(p.mode==='loop'){this.acc+=p.rate*h;while(this.acc>=1){this.acc-=1;this.spawn()}}
+    else if(this.emitted<p.count){var tgt=p.burstTime>0?Math.min(p.count,Math.ceil(p.count*Math.min(1,(this.t+h)/p.burstTime))):p.count;while(this.emitted<tgt){this.spawn();this.emitted++}}
+    var k=Math.exp(-p.drag*h);
+    for(i=this.parts.length-1;i>=0;i--){var q=this.parts[i];q.age+=h;if(q.age>=q.life){this.parts.splice(i,1);continue}q.vx*=k;q.vy=q.vy*k+p.gravity*h;q.x+=q.vx*h;q.y+=q.vy*h;q.rot+=q.spin*h}
+    this.t+=h;
+  };
+  System.prototype.update=function(dt){dt=Math.min(dt,.25);while(dt>1e-6){var h=Math.min(dt,1/60);dt-=h;this.step(h)}};
+  Object.defineProperty(System.prototype,'done',{get:function(){return this.p.mode!=='loop'&&this.emitted>=this.p.count&&this.parts.length===0}});
+  // c = a 2d canvas context, x / y = where the emitter is, s = scale (default 1), o = overall opacity (default 1)
+  System.prototype.draw=function(c,x,y,s,o){
+    var p=this.p,n=this.ramp.length;if(!n)return;s=s||1;o=o==null?1:o;
+    var asp=this.sprite.height/this.sprite.width,multi=!!(p.multi&&p.multi.length)&&p.tint!==false;
+    c.save();c.translate(x,y);c.scale(s,s);if(p.blend==='add')c.globalCompositeOperation='lighter';
+    for(var i=0;i<this.parts.length;i++){
+      var q=this.parts[i],k=q.age/q.life,a=lerp(p.alpha0,p.alpha1,k)*Math.min(1,k/.05)*o,sz=q.size*lerp(1,p.endScale,k);
+      if(sz<.5||a<=.003)continue;
+      var img=multi?this.ramp[q.ci%n]:this.ramp[Math.min(n-1,Math.floor(k*n))];
+      c.globalAlpha=a>1?1:a;
+      c.save();c.translate(q.x,q.y);c.rotate(p.face?Math.atan2(q.vy,q.vx)+1.5708:q.rot);c.drawImage(img,-sz/2,-sz*asp/2,sz,sz*asp);c.restore();
+    }
+    c.restore();
+  };
+  // how far from the emitter the particles can get (used to size the layer's picture)
+  function reach(p){
+    var L=p.lifeMax,d=p.drag,sp=p.speedMax,dist=d>0.01?sp*(1-Math.exp(-d*L))/d:sp*L,g2=Math.abs(p.gravity)*L*L/2,g=d>0.01?Math.min(g2,Math.abs(p.gravity)/d*L):g2;
+    return Math.max(64,Math.min(900,p.radius+dist+g+p.sizeMax*Math.max(1,p.endScale)));
+  }
+  return {System:System,reach:reach,version:1};
+}
+const FXE=lfFxEngine();
+
+/* parameters: [key, label, min, max, step, unit, only-for-mode] */
+const FXP=[['count','count',1,600,1,'','burst'],['rate','per second',1,300,1,'','loop'],['burstTime','burst time',0,0.6,0.01,'s','burst'],
+  ['lifeMin','life min',0.1,6,0.05,'s'],['lifeMax','life max',0.1,8,0.05,'s'],['speedMin','speed min',0,1500,5,''],['speedMax','speed max',0,1800,5,''],
+  ['angle','direction',-180,180,1,'°'],['spread','spread',0,360,1,'°'],['gravity','gravity',-1200,1600,5,''],['drag','drag',0,6,0.05,''],
+  ['sizeMin','size min',2,300,1,'px'],['sizeMax','size max',2,400,1,'px'],['endScale','end size',0,4,0.05,'×'],
+  ['alpha0','start alpha',0,1,0.01,''],['alpha1','end alpha',0,1,0.01,''],['spinMin','spin min',-720,720,5,'°/s'],['spinMax','spin max',-720,720,5,'°/s'],['radius','emitter size',0,600,1,'px']];
+const FXPK=Object.fromEntries(FXP.map(a=>[a[0],a]));
+const FXDEF={v:1,recipe:'explosion',mode:'burst',count:120,rate:40,burstTime:0.02,lifeMin:0.4,lifeMax:1,speedMin:150,speedMax:600,angle:-90,spread:360,gravity:80,drag:2.2,sizeMin:40,sizeMax:100,endScale:0.3,alpha0:1,alpha1:0,spinMin:-90,spinMax:90,radius:10,color0:'#FFD27A',color1:'#E5484D',blend:'add',tint:true,face:false,multi:null,spr:'builtin:soft',seed:1};
+const FXR={ // recipes: a [low, high] range for each setting; roll picks inside it
+  explosion:{mode:'burst',blend:'add',spr:'soft',pal:[['#FFD27A','#E5484D'],['#FFF2B0','#FF7A1A'],['#BFE6FF','#3E8EF7'],['#FFE9A8','#B8321F']],r:{count:[80,220],burstTime:[0,0.05],lifeMin:[0.3,0.5],lifeMax:[0.7,1.3],speedMin:[100,250],speedMax:[400,900],angle:[-90,-90],spread:[360,360],gravity:[0,200],drag:[1.5,3.5],sizeMin:[30,60],sizeMax:[70,140],endScale:[0.1,0.5],alpha0:[0.8,1],alpha1:[0,0],spinMin:[-120,-30],spinMax:[30,120],radius:[0,30]}},
+  smoke:{mode:'loop',blend:'normal',spr:'smoke',pal:[['#C9C6BD','#6B6862'],['#FFFFFF','#8A8A8A'],['#8E8A82','#3A3835']],r:{rate:[8,30],lifeMin:[1.2,2.2],lifeMax:[2.4,4.2],speedMin:[20,50],speedMax:[60,120],angle:[-90,-90],spread:[20,60],gravity:[-70,-10],drag:[0.2,1],sizeMin:[40,80],sizeMax:[90,180],endScale:[1.6,3],alpha0:[0.25,0.5],alpha1:[0,0],spinMin:[-40,-10],spinMax:[10,40],radius:[5,30]}},
+  fire:{mode:'loop',blend:'add',spr:'soft',pal:[['#FFE08A','#E5484D'],['#FFFFFF','#FF7A1A'],['#9FE8FF','#3E8EF7'],['#D6FFB0','#3FB950']],r:{rate:[40,120],lifeMin:[0.4,0.8],lifeMax:[0.8,1.4],speedMin:[40,120],speedMax:[120,260],angle:[-90,-90],spread:[15,40],gravity:[-300,-80],drag:[0.5,2],sizeMin:[30,60],sizeMax:[60,110],endScale:[0.1,0.4],alpha0:[0.8,1],alpha1:[0,0],spinMin:[0,0],spinMax:[0,0],radius:[8,40]}},
+  sparks:{mode:'burst',blend:'add',spr:'spark',face:true,pal:[['#FFF2B0','#FF7A1A'],['#FFFFFF','#7FD1FF'],['#FFE08A','#E5484D']],r:{count:[30,120],burstTime:[0,0.08],lifeMin:[0.3,0.6],lifeMax:[0.6,1.2],speedMin:[200,400],speedMax:[500,1000],angle:[-90,-90],spread:[60,360],gravity:[400,1000],drag:[0.2,1],sizeMin:[6,14],sizeMax:[14,30],endScale:[0.2,0.8],alpha0:[1,1],alpha1:[0,0],spinMin:[0,0],spinMax:[0,0],radius:[0,10]}},
+  magic:{mode:'loop',blend:'add',spr:'star',pal:[['#C9A8FF','#3E8EF7'],['#FFFFFF','#F5C518'],['#9FFFD0','#3FB950'],['#FFB3E6','#9B5CF6']],r:{rate:[15,60],lifeMin:[0.8,1.6],lifeMax:[1.6,2.8],speedMin:[10,40],speedMax:[40,120],angle:[-90,-90],spread:[360,360],gravity:[-80,20],drag:[0.3,1.2],sizeMin:[14,30],sizeMax:[30,70],endScale:[0,0.5],alpha0:[0.8,1],alpha1:[0,0],spinMin:[-200,-60],spinMax:[60,200],radius:[10,80]}},
+  rain:{mode:'loop',blend:'normal',spr:'drop',face:true,pal:[['#BFD8FF','#7FA8E8'],['#E8F0FF','#9DB8DD']],r:{rate:[80,250],lifeMin:[0.5,0.9],lifeMax:[0.9,1.4],speedMin:[600,900],speedMax:[900,1400],angle:[96,100],spread:[2,10],gravity:[0,0],drag:[0,0],sizeMin:[5,8],sizeMax:[8,14],endScale:[1,1],alpha0:[0.5,0.9],alpha1:[0.3,0.6],spinMin:[0,0],spinMax:[0,0],radius:[300,600]}},
+  confetti:{mode:'burst',blend:'normal',spr:'square',multi:[['#E5484D','#3E8EF7','#F5C518','#3FB950','#FF7AC6','#FFFFFF']],pal:[['#FFFFFF','#FFFFFF']],r:{count:[60,200],burstTime:[0,0.1],lifeMin:[1.5,2.2],lifeMax:[2.2,3.2],speedMin:[300,500],speedMax:[600,1000],angle:[-90,-90],spread:[90,200],gravity:[500,900],drag:[0.8,2],sizeMin:[10,16],sizeMax:[16,28],endScale:[1,1],alpha0:[1,1],alpha1:[0.6,1],spinMin:[-720,-200],spinMax:[200,720],radius:[0,20]}},
+  dust:{mode:'burst',blend:'normal',spr:'smoke',pal:[['#CBBFAE','#8C7B6B'],['#E0D8C8','#A39682']],r:{count:[10,30],burstTime:[0,0.1],lifeMin:[0.4,0.8],lifeMax:[0.8,1.4],speedMin:[30,100],speedMax:[100,200],angle:[-90,-90],spread:[120,180],gravity:[-20,60],drag:[1,3],sizeMin:[20,40],sizeMax:[40,80],endScale:[1.5,2.5],alpha0:[0.3,0.6],alpha1:[0,0],spinMin:[-60,-10],spinMax:[10,60],radius:[5,25]}}
+};
+const FXSPRN=['soft','spark','smoke','star','ring','square','drop'];
+function fxMakeBuiltin(name){
+  const w=name==='drop'?40:96,h=name==='drop'?100:96,c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');
+  const g=(cx,cy,r,st)=>{const q=x.createRadialGradient(cx,cy,0,cx,cy,r);st.forEach(s=>q.addColorStop(s[0],s[1]));return q};
+  if(name==='soft'){x.fillStyle=g(48,48,48,[[0,'rgba(255,255,255,1)'],[.35,'rgba(255,255,255,.55)'],[1,'rgba(255,255,255,0)']]);x.fillRect(0,0,96,96)}
+  else if(name==='spark'){x.fillStyle=g(48,48,48,[[0,'rgba(255,255,255,1)'],[.25,'rgba(255,255,255,.5)'],[1,'rgba(255,255,255,0)']]);x.beginPath();x.moveTo(48,2);x.quadraticCurveTo(54,48,48,94);x.quadraticCurveTo(42,48,48,2);x.fill();x.beginPath();x.moveTo(6,48);x.quadraticCurveTo(48,52,90,48);x.quadraticCurveTo(48,44,6,48);x.fill();x.fillStyle=g(48,48,22,[[0,'rgba(255,255,255,1)'],[1,'rgba(255,255,255,0)']]);x.fillRect(20,20,56,56)}
+  else if(name==='smoke'){let s=7;const rn=()=>{s=(s*16807)%2147483647;return s/2147483647};for(let i=0;i<16;i++){const cx=30+rn()*36,cy=30+rn()*36,r=16+rn()*16;x.fillStyle=g(cx,cy,r,[[0,'rgba(255,255,255,.34)'],[1,'rgba(255,255,255,0)']]);x.fillRect(0,0,96,96)}}
+  else if(name==='star'){x.shadowColor='#fff';x.shadowBlur=8;x.fillStyle='#fff';x.beginPath();for(let k=0;k<10;k++){const a=(-90+36*k)*Math.PI/180,r=k%2?15:38;k?x.lineTo(48+r*Math.cos(a),48+r*Math.sin(a)):x.moveTo(48+r*Math.cos(a),48+r*Math.sin(a))}x.closePath();x.fill()}
+  else if(name==='ring'){x.shadowColor='#fff';x.shadowBlur=8;x.strokeStyle='#fff';x.lineWidth=8;x.beginPath();x.arc(48,48,32,0,7);x.stroke()}
+  else if(name==='square'){x.fillStyle='#fff';x.fillRect(8,8,80,80)}
+  else{x.fillStyle=g(20,62,40,[[0,'rgba(255,255,255,1)'],[.5,'rgba(255,255,255,.7)'],[1,'rgba(255,255,255,0)']]);x.beginPath();x.ellipse(20,50,8,46,0,0,7);x.fill()}
+  return c;
+}
+const fxSprCache=new Map();
+function fxSprite(spr){
+  spr=spr||'builtin:soft';
+  if(fxSprCache.has(spr))return fxSprCache.get(spr);
+  const pr=spr.startsWith('builtin:')?Promise.resolve(fxMakeBuiltin(FXSPRN.includes(spr.slice(8))?spr.slice(8):'soft')):new Promise((res,rej)=>{const im=new Image();im.onload=()=>{const k=Math.min(1,128/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));c.getContext('2d').drawImage(im,0,0,c.width,c.height);res(c)};im.onerror=()=>rej(new Error('sprite could not be read'));im.src=spr});
+  fxSprCache.set(spr,pr);pr.catch(()=>fxSprCache.delete(spr));return pr;
+}
+function fxClean(o,bs){
+  const n=(k,d)=>{const a=FXPK[k],v=+o[k];return isFinite(v)&&o[k]!==null&&o[k]!==''?Math.min(a[3],Math.max(a[2],v)):d};
+  const p={...FXDEF};for(const a of FXP)p[a[0]]=n(a[0],FXDEF[a[0]]);
+  p.recipe=FXR[o.recipe]?o.recipe:'explosion';p.mode=o.mode==='loop'?'loop':'burst';p.blend=o.blend==='normal'?'normal':'add';p.tint=o.tint!==false;p.face=!!o.face;
+  p.color0=hex6(o.color0)?o.color0:FXDEF.color0;p.color1=hex6(o.color1)?o.color1:FXDEF.color1;
+  p.multi=Array.isArray(o.multi)&&o.multi.length?o.multi.filter(hex6).slice(0,12):null;if(p.multi&&!p.multi.length)p.multi=null;
+  p.spr=typeof o.spr==='string'&&(o.spr.startsWith('builtin:')||o.spr.startsWith('data:image/'))?o.spr:'builtin:soft';
+  p.seed=Math.floor(Math.abs(+o.seed))||1;if(bs!=null)p.bs=bs;return p;
+}
+const fxQ=(k,v)=>{const a=FXPK[k];if(!a)return v;const st=a[4],q=Math.round(v/st)*st;return +Math.min(a[3],Math.max(a[2],q)).toFixed(3)};
+function fxOk(l){if(!l.fx)return false;const r=store.get(l.id);return !!(r&&r.blob&&r.blob.size===l.fx.bs)}
+async function fxPoster(p){ // the still picture an effect layer shows: the effect caught part-way through
+  const spr=await fxSprite(p.spr),half=Math.ceil(FXE.reach(p)),W=Math.max(32,half*2),sys=new FXE.System(p,spr,p.seed);
+  sys.update(p.mode==='loop'?Math.min(p.lifeMax*1.3,3):Math.min(p.burstTime+p.lifeMax*0.35,1.2));
+  const cv=document.createElement('canvas');cv.width=cv.height=W;sys.draw(cv.getContext('2d'),W/2,W/2,1);
+  return {cv,W,H:W};
+}
+/* ----- state, favourites ----- */
+const fxs={p:null,locks:new Set(),editId:null,amount:0.3,sys:null,sprite:null,open:false,raf:0,last:0,idle:0,sprPicked:false,favs:[],cv:null};
+try{const a=JSON.parse(localStorage.getItem('lf-fxfavs'));if(Array.isArray(a))fxs.favs=a.filter(f=>f&&f.p).slice(0,24).map(f=>({name:String(f.name||'effect').slice(0,30),p:fxClean(f.p)}))}catch(_){}
+const fxSaveFavs=()=>{try{localStorage.setItem('lf-fxfavs',JSON.stringify(fxs.favs))}catch(_){toast('could not keep favourites in this browser','warn')}};
+const fxRand=(a,b)=>a+Math.random()*(b-a);
+function fxRoll(rk){
+  const key=FXR[rk]?rk:(fxs.p&&fxs.p.recipe)||'explosion',R=FXR[key],p={...(fxs.p||FXDEF),recipe:key},L=fxs.locks;
+  for(const k in R.r){if(L.has(k))continue;const [a,b]=R.r[k];p[k]=fxQ(k,fxRand(a,b))}
+  if(!L.has('mode'))p.mode=R.mode;if(!L.has('blend'))p.blend=R.blend;p.face=!!R.face;
+  if(!L.has('color')){const pal=R.pal[Math.floor(Math.random()*R.pal.length)];p.color0=pal[0];p.color1=pal[1];p.multi=R.multi?R.multi[0]:null}
+  if(!fxs.sprPicked)p.spr='builtin:'+R.spr;
+  if(!L.has('seed'))p.seed=1+Math.floor(Math.random()*1e6);
+  for(const [a,b] of [['lifeMin','lifeMax'],['speedMin','speedMax'],['sizeMin','sizeMax'],['spinMin','spinMax']])if(p[a]>p[b]){const t=p[a];p[a]=p[b];p[b]=t}
+  fxs.p=fxClean(p);fxs.p.seed=p.seed;fxRefresh();
+}
+function fxMutate(){
+  if(!fxs.p)return fxRoll();const p={...fxs.p},am=fxs.amount;
+  for(const a of FXP){const k=a[0];if(fxs.locks.has(k))continue;p[k]=fxQ(k,p[k]+(Math.random()-.5)*2*am*(a[3]-a[2])*0.25)}
+  if(!fxs.locks.has('seed'))p.seed=1+Math.floor(Math.random()*1e6);
+  fxs.p=fxClean(p);fxs.p.seed=p.seed;fxRefresh();
+}
+/* ----- the fx tab ----- */
+const FXP_=$('#fxp');
+function fxBuild(){
+  const rows=FXP.map(a=>`<div class="fxrow" data-row="${a[0]}"${a[6]?` data-only="${a[6]}"`:''}><label>${a[1]}</label><input type="range" min="${a[2]}" max="${a[3]}" step="${a[4]}" data-fx="${a[0]}" aria-label="${a[1]}"><span class="dim fxv" data-fxv="${a[0]}"></span><button class="lk" data-lk="${a[0]}" title="lock: this stays as it is when you roll or mutate" aria-label="lock ${a[1]}">○</button></div>`).join('');
+  $('#fxc').innerHTML=`<div class="fxsec"><div class="fxh">$ sprite</div><div class="fxspr" id="fxspr">${FXSPRN.map(n=>`<button class="sm" data-spr="${n}">${n}</button>`).join('')}<button class="sm" data-spr="layer" title="use the selected layer's picture as the particle">selected layer</button><button class="sm" data-spr="upload" title="use a png from your device">upload…</button></div><input type="file" id="fxfile" accept="image/*" hidden></div>
+  <div class="fxsec"><div class="fxh">$ effect</div><div class="fxbig"><select id="fxrec" aria-label="recipe">${Object.keys(FXR).map(k=>`<option value="${k}">${k}</option>`).join('')}</select><button class="btn-clay" id="fxroll" title="new random effect from this recipe (anything locked stays)">🎲 roll</button></div>
+    <div class="fxbig"><button class="sm" id="fxmut" title="small changes to this effect (anything locked stays)">↻ mutate</button><input type="range" id="fxamt" min="0.05" max="1" step="0.05" value="0.3" aria-label="how much to change"><button class="sm" id="fxfav" title="keep this effect in your favourites (and in the game zip)">♥ keep</button></div>
+    <div class="fxfavs" id="fxfavs"></div></div>
+  <div class="fxsec"><div class="fxh">$ look</div>
+    <div class="fxrow"><label>mode</label><select id="fxmode" aria-label="burst or loop"><option value="burst">burst (once)</option><option value="loop">loop</option></select><span></span><button class="lk" data-lk="mode" title="lock mode">○</button></div>
+    <div class="fxrow"><label>colour</label><span class="fxcols"><input type="color" id="fxc0" aria-label="start colour"><span class="dim">→</span><input type="color" id="fxc1" aria-label="end colour"></span><span class="dim" id="fxmulti"></span><button class="lk" data-lk="color" title="lock colours">○</button></div>
+    <div class="fxrow"><label>blend</label><select id="fxblend" aria-label="blend"><option value="add">glow (add)</option><option value="normal">normal</option></select><label class="ck"><input type="checkbox" id="fxtint"> tint sprite</label><button class="lk" data-lk="blend" title="lock blend">○</button></div></div>
+  <div class="fxsec"><div class="fxh">$ settings</div>${rows}<div class="fxrow"><label>random seed</label><span class="dim" id="fxseed"></span><span></span><button class="lk" data-lk="seed" title="lock the seed: the scatter stays the same when you roll">○</button></div></div>
+  <div class="fxsec fxact"><button class="btn-clay" id="fxadd" title="put this effect on the canvas as a layer">＋ add to scene</button><button class="sm" id="fxupd" hidden title="change the effect layer you opened with edit">update layer</button><span class="dim" id="fxmsg"></span></div>`;
+}
+fxBuild();
+function fxRefresh(){ // p changed: update the controls and restart the preview
+  const p=fxs.p;if(!p)return;
+  $('#fxrec').value=p.recipe;$('#fxmode').value=p.mode;$('#fxc0').value=p.color0;$('#fxc1').value=p.color1;$('#fxblend').value=p.blend;$('#fxtint').checked=p.tint;
+  $('#fxmulti').textContent=p.multi?'multi-colour':'';$('#fxc0').disabled=$('#fxc1').disabled=!!p.multi;$('#fxseed').textContent='#'+p.seed;
+  for(const a of FXP){const el=$(`[data-fx="${a[0]}"]`,$('#fxc'));if(el&&el!==document.activeElement)el.value=p[a[0]];const v=$(`[data-fxv="${a[0]}"]`,$('#fxc'));if(v)v.textContent=(Math.round(p[a[0]]*100)/100)+a[5]}
+  $$('[data-only]',$('#fxc')).forEach(r=>r.hidden=r.dataset.only!==p.mode);
+  $$('#fxspr [data-spr]').forEach(b=>b.classList.toggle('on',p.spr==='builtin:'+b.dataset.spr));
+  $$('[data-lk]',$('#fxc')).forEach(b=>{const on=fxs.locks.has(b.dataset.lk);b.textContent=on?'●':'○';b.classList.toggle('on',on)});
+  $('#fxupd').hidden=!fxs.editId;$('#fxadd').textContent=fxs.editId?'＋ add as new layer':'＋ add to scene';
+  $('#fxmsg').textContent=fxs.editId?'editing the effect layer you opened':'';
+  fxFavsDraw();fxLoadSprite();
+}
+async function fxLoadSprite(){
+  const p=fxs.p;if(!p)return;let s;try{s=await fxSprite(p.spr)}catch(e){toast('could not read that picture, using the soft dot','warn');fxs.p.spr='builtin:soft';s=await fxSprite('builtin:soft')}
+  if(fxs.p!==p&&fxs.p.spr!==p.spr)return;fxs.sprite=s;fxRestart();
+}
+function fxRestart(){if(!fxs.p||!fxs.sprite)return;fxs.sys=new FXE.System(fxs.p,fxs.sprite,fxs.p.seed);fxs.idle=0}
+function fxFavsDraw(){
+  const el=$('#fxfavs');if(!el)return;
+  el.innerHTML=fxs.favs.length?fxs.favs.map((f,i)=>`<span class="fxfav"><button class="sm" data-fav="${i}" title="load this favourite">♥ ${esc(f.name)}</button><button class="sm" data-favdel="${i}" title="remove this favourite" aria-label="remove favourite">×</button></span>`).join(''):'<span class="dim">hearts you keep show up here</span>';
+}
+function fxTick(now){
+  if(!fxs.open)return;fxs.raf=requestAnimationFrame(fxTick);
+  const dt=Math.min(.05,(now-(fxs.last||now))/1000);fxs.last=now;
+  const c=fxs.cv,W=c.clientWidth,H=c.clientHeight,d=Math.min(devicePixelRatio||1,2);
+  if(c.width!==Math.round(W*d)||c.height!==Math.round(H*d)){c.width=Math.round(W*d);c.height=Math.round(H*d)}
+  const x=c.getContext('2d');x.setTransform(d,0,0,d,0,0);x.fillStyle='#111110';x.fillRect(0,0,W,H);
+  x.strokeStyle='#1d1d1b';x.lineWidth=1;x.beginPath();for(let i=0;i<W;i+=40){x.moveTo(i+.5,0);x.lineTo(i+.5,H)}for(let j=0;j<H;j+=40){x.moveTo(0,j+.5);x.lineTo(W,j+.5)}x.stroke();
+  x.strokeStyle='#3a3833';x.beginPath();x.moveTo(W/2-8,H/2);x.lineTo(W/2+8,H/2);x.moveTo(W/2,H/2-8);x.lineTo(W/2,H/2+8);x.stroke();
+  if(!fxs.sys)return;
+  fxs.sys.update(dt);
+  if(fxs.sys.done){fxs.idle+=dt;if(fxs.idle>0.8)fxRestart()}
+  const s=Math.min(2,Math.min(W,H)/(2*FXE.reach(fxs.p)*1.05));
+  fxs.sys.draw(x,W/2,H/2,s);
+  x.fillStyle='#7a7870';x.font='11px ui-monospace,Consolas,monospace';x.textAlign='left';x.fillText(fxs.sys.parts.length+' particles · view '+Math.round(s*100)+'%',10,H-10);
+}
+function fxOpen(load){
+  if(typeof cancelWand==='function'&&sess){cancelWand();setTool('move')}
+  fxs.open=true;FXP_.classList.add('show');$('#tab-fx').classList.add('on');$('#tab-canvas').classList.remove('on');
+  if(!fxs.cv)fxs.cv=$('#fxcv');
+  if(load){fxs.p=fxClean(load);fxs.sprPicked=true}
+  if(!fxs.p){fxs.sprPicked=false;fxRoll('explosion')}else fxRefresh();
+  cancelAnimationFrame(fxs.raf);fxs.last=0;fxs.raf=requestAnimationFrame(fxTick);
+}
+function fxClose(){if(!fxs.open)return;fxs.open=false;fxs.editId=null;FXP_.classList.remove('show');$('#tab-fx').classList.remove('on');$('#tab-canvas').classList.add('on');cancelAnimationFrame(fxs.raf);draw()}
+function fxPick(spr){fxs.p.spr=spr;fxs.sprPicked=true;fxRefresh()}
+function fxSprFromLayer(){
+  const L=sel(),r=L&&store.get(L.id);if(!L||!r||!r.pv)return toast('select a layer first - its picture becomes the particle','warn');
+  const k=Math.min(1,128/Math.max(r.pv.width,r.pv.height)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(r.pv.width*k));c.height=Math.max(1,Math.round(r.pv.height*k));
+  c.getContext('2d').drawImage(r.pv,0,0,c.width,c.height);fxPick(c.toDataURL('image/png'));toast('using "'+L.name+'" as the particle','good');
+}
+function fxSprFromFile(f){const fr=new FileReader();fr.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,128/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));c.getContext('2d').drawImage(im,0,0,c.width,c.height);fxPick(c.toDataURL('image/png'))};im.onerror=()=>toast('could not read that picture','err');im.src=fr.result};fr.readAsDataURL(f)}
+$('#fxc').addEventListener('input',e=>{
+  const t=e.target,p=fxs.p;if(!p)return;
+  if(t.dataset.fx){p[t.dataset.fx]=+t.value;const a=FXPK[t.dataset.fx],v=$(`[data-fxv="${t.dataset.fx}"]`,$('#fxc'));if(v)v.textContent=(Math.round(+t.value*100)/100)+a[5];fxRestart();return}
+  if(t.id==='fxc0'){p.color0=t.value;fxRestart()}else if(t.id==='fxc1'){p.color1=t.value;fxRestart()}
+  else if(t.id==='fxamt')fxs.amount=+t.value;
+});
+$('#fxc').addEventListener('change',e=>{
+  const t=e.target,p=fxs.p;if(!p)return;
+  if(t.id==='fxmode'){p.mode=t.value;fxRefresh()}else if(t.id==='fxblend'){p.blend=t.value;fxRestart()}else if(t.id==='fxtint'){p.tint=t.checked;fxRestart()}
+  else if(t.id==='fxrec'){fxs.sprPicked=false;fxRoll(t.value)}
+  else if(t.id==='fxfile'&&t.files&&t.files[0]){fxSprFromFile(t.files[0]);t.value=''}
+});
+$('#fxc').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.lk){const k=b.dataset.lk;fxs.locks.has(k)?fxs.locks.delete(k):fxs.locks.add(k);fxRefresh();return}
+  if(b.dataset.spr){const s=b.dataset.spr;if(s==='layer')fxSprFromLayer();else if(s==='upload')$('#fxfile').click();else fxPick('builtin:'+s);return}
+  if(b.id==='fxroll'){fxRoll($('#fxrec').value);return}
+  if(b.id==='fxmut'){fxMutate();return}
+  if(b.id==='fxfav'){const n=fxs.favs.filter(f=>f.p.recipe===fxs.p.recipe).length+1;fxs.favs.unshift({name:fxs.p.recipe+' '+n,p:fxClean(fxs.p)});fxs.favs.length=Math.min(fxs.favs.length,24);fxSaveFavs();fxFavsDraw();toast('kept in favourites','good');return}
+  if(b.dataset.fav!=null){const f=fxs.favs[+b.dataset.fav];if(f){fxs.p=fxClean(f.p);fxs.sprPicked=true;fxRefresh()}return}
+  if(b.dataset.favdel!=null){fxs.favs.splice(+b.dataset.favdel,1);fxSaveFavs();fxFavsDraw();return}
+  if(b.id==='fxadd'){fxAddLayer();return}
+  if(b.id==='fxupd'){fxUpdateLayer();return}
+});
+$('#fx-replay').onclick=()=>fxRestart();
+$('#tab-fx').onclick=()=>{if(fxs.open)fxClose();else{fxs.editId=null;fxs.locks.clear();fxOpen()}};
+$('#tab-canvas').onclick=fxClose;
+$('#rail').addEventListener('click',()=>fxClose());
+for(const ev of ['pointerdown','pointermove','pointerup','wheel','keydown','keyup','dblclick','contextmenu'])FXP_.addEventListener(ev,e=>e.stopPropagation());
+/* ----- effect layers on the canvas ----- */
+async function fxAddLayer(){
+  if(!fxs.p)return;setBusy(1);
+  try{
+    const p=fxClean(fxs.p),{cv,W,H}=await fxPoster(p),blob=await toBlobAsync(cv),id=newId(),m=maskFrom(cv);p.bs=blob.size;
+    store.set(id,{blob,pv:cv,mask:m.mask,mw:m.mw,mh:m.mh,w:W,h:H});
+    const c=toScene({x:cw/2,y:ch/2}),cx=clamp(c.x,0,state.W),cy=clamp(c.y,0,state.H),n=state.layers.filter(l=>l.fx&&l.fx.recipe===p.recipe).length+1,i=state.layers.findIndex(l=>l.id===state.sel);
+    fxClose();
+    edit(()=>{state.layers.splice(i<0?state.layers.length:i+1,0,{id,name:'fx '+p.recipe+' '+n,x:Math.round(cx-W/2),y:Math.round(cy-H/2),w:W,h:H,scale:1,rot:0,px:.5,py:.5,op:1,vis:true,lock:false,ai:false,fx:p});state.sel=id});
+    setTool('move');setTimeout(()=>{const row=$(`.row[data-id="${id}"]`,LP);if(row)row.scrollIntoView({block:'nearest'})},60);
+    toast('effect added · press ▶ play in the layer panel (under its name) to see it in the scene','good');
+  }catch(err){console.error(err);toast('could not add the effect: '+err.message,'err')}finally{setBusy(-1)}
+}
+async function fxUpdateLayer(){
+  const id=fxs.editId,L=state.layers.find(l=>l.id===id),r=store.get(id);if(!L||!r)return toast('that effect layer is gone','warn');
+  setBusy(1);
+  try{
+    fxPlaying.delete(id);const meta=snapshot(),old=r.blob,p=fxClean(fxs.p),{cv,W,H}=await fxPoster(p),blob=await toBlobAsync(cv);p.bs=blob.size;
+    L.fx=p;shapePlace(L,W,H);r.pv=cv;r.w=W;r.h=H;Object.assign(r,maskFrom(cv));r.blob=blob;r.tc=null;tcache.clear();savedBlobs.delete(id);
+    U.push({px:id,blob:old,meta});if(U.length>100)U.shift();R.length=0;lastStruct='';state.sel=id;fxClose();changed();toast('effect layer updated (ctrl+z undoes it)','good');
+  }catch(err){console.error(err);toast('could not update: '+err.message,'err')}finally{setBusy(-1)}
+}
+var fxPlaying=new Map();
+async function fxPlay(id){
+  const L=state.layers.find(l=>l.id===id);if(!L||!fxOk(L))return;
+  if(fxPlaying.has(id)){fxPlaying.delete(id);fxPlayBtn();draw();return}
+  const spr=await fxSprite(L.fx.spr);fxPlaying.set(id,{sys:new FXE.System(L.fx,spr,L.fx.seed),last:performance.now()});fxPlayBtn();draw();
+}
+function fxPlayBtn(){const L=sel(),b=$('[data-fxact="play"]',LP);if(b&&L)b.textContent=fxPlaying.has(L.id)?'■ stop':'▶ play'}
+function fxPaintLayer(L){ // called inside paint() with the layer's transform applied: origin of the effect = middle of the layer
+  const s=fxPlaying.get(L.id),now=performance.now();s.sys.update((now-s.last)/1000);s.last=now;s.sys.draw(ctx,L.w/2,L.h/2,1,L.op);
+  if(s.sys.done&&L.fx.mode!=='loop')setTimeout(()=>{fxPlaying.delete(L.id);fxPlayBtn();draw()},250);
+  draw();
+}
+function fxInspector(L){
+  if(!L.fx||!fxOk(L))return '';const f=L.fx;
+  return `<div class="shbox"><div class="line"><label>effect</label><span class="dim" style="flex:1">${esc(f.recipe)} · ${f.mode}</span><button class="sm" data-fxact="play" title="${f.mode==='loop'?'play the loop (press again to stop)':'play the effect once on the scene'}">${fxPlaying&&fxPlaying.has(L.id)?'■ stop':'▶ play'}</button><button class="sm" data-fxact="edit" title="open this effect in the fx tab to roll or change it">edit</button></div></div>`;
+}
+LP.addEventListener('click',e=>{
+  const b=e.target.closest('[data-fxact]');if(!b)return;const L=sel();if(!L||!fxOk(L))return;
+  if(b.dataset.fxact==='play')fxPlay(L.id);
+  else{fxs.editId=L.id;fxs.sprPicked=true;fxs.locks.clear();fxOpen(L.fx)}
+});
+/* ----- saving: scene.json carries the effect, the zip carries the sprite, and the game gets fx.json + particles.js + a README ----- */
+const fxSpriteFile=(l,i)=>l.fx.spr.startsWith('builtin:')?'fx-sprites/'+l.fx.spr.slice(8)+'.png':'fx-sprites/'+slug(l.name)+'-'+i+'.png';
+function fxPublic(l,i){const {bs,spr,...o}=l.fx;return {...o,effect:l.name,sprite:fxSpriteFile(l,i),...(spr.startsWith('builtin:')?{builtin:spr.slice(8)}:{})}}
+async function fxSpriteBytes(spr){const c=await fxSprite(spr),b=await toBlobAsync(c);return new Uint8Array(await b.arrayBuffer())}
+const fxToDataURL=u8=>new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(new Blob([u8],{type:'image/png'}))});
+async function fxLoad(o,files,bs){
+  let spr='builtin:soft';
+  if(o.builtin&&FXSPRN.includes(o.builtin))spr='builtin:'+o.builtin;
+  else if(o.sprite){const base=String(o.sprite).replace(/^.*\//,''),fk=[...files.keys()].find(k=>k.replace(/^.*\//,'')===base);if(fk)spr=await fxToDataURL(files.get(fk))}
+  return fxClean({...o,spr},bs);
+}
+async function fxExportEntries(list){ // extra zip entries for the game; [] when the scene has no effects
+  const fl=list.map((l,i)=>[l,i]).filter(([l])=>l.fx&&fxOk(l)),out=[],seen=new Set();
+  if(!fl.length&&!fxs.favs.length)return out;
+  const effects={},enc=new TextEncoder();
+  for(const [l,i] of fl){const f=fxSpriteFile(l,i);effects[l.name]=(({effect,...o})=>o)(fxPublic(l,i));if(!seen.has(f)){seen.add(f);out.push({name:f,data:await fxSpriteBytes(l.fx.spr)})}}
+  fxs.favs.forEach((fv,k)=>{const nm='fav '+fv.name,{bs,spr,...o}=fv.p,f=spr.startsWith('builtin:')?'fx-sprites/'+spr.slice(8)+'.png':'fx-sprites/fav-'+k+'.png';effects[nm]={...o,sprite:f,...(spr.startsWith('builtin:')?{builtin:spr.slice(8)}:{})};if(!seen.has(f)){seen.add(f);out.push({sp:spr,name:f})}});
+  for(const e of out)if(e.sp){e.data=await fxSpriteBytes(e.sp);delete e.sp}
+  out.push({name:'fx.json',data:enc.encode(JSON.stringify({format:'layerforge-fx',version:1,note:'one entry per effect; see FX-README.md',effects},null,2))});
+  out.push({name:'particles.js',data:enc.encode(FX_RUNTIME())});
+  out.push({name:'FX-README.md',data:enc.encode(FX_README)});
+  return out;
+}
+const FX_RUNTIME=()=>`/* Layerforge FX runtime (particles). Browser canvas 2D, no dependencies. See FX-README.md.\n   Usage: new LayerforgeFX.System(effect, spriteImage, seed) ; sys.update(dtSeconds) ; sys.draw(ctx, x, y, scale, opacity) ; sys.done */\n(function(root){\nvar LayerforgeFX=(${lfFxEngine.toString()})();\nif(typeof module!=='undefined'&&module.exports)module.exports=LayerforgeFX;else root.LayerforgeFX=LayerforgeFX;\n})(typeof window!=='undefined'?window:this);\n`;
+const FX_README=`# Layerforge FX: particle effects for the game
+
+This folder was exported from Layerforge. Effects are made in the app (roll / lock / mutate until they feel right) and saved as plain settings, so the game replays them with a small runtime.
+
+## Files
+- \`fx.json\`: every effect, by name: \`{ "format":"layerforge-fx", "effects": { "<name>": { ...settings, "sprite":"fx-sprites/x.png" } } }\`. Effects named \`fav ...\` are the app's saved favourites (not placed in the scene).
+- \`fx-sprites/*.png\`: the particle pictures (white soft shapes, tinted by the runtime from \`color0\` to \`color1\`).
+- \`particles.js\`: the runtime. Plain script, sets \`LayerforgeFX\` (also usable with \`require\`). Needs a browser (it makes canvases).
+- \`scene.json\`: a layer with an \`fx\` block is an effect placed in the scene. The emitter is the CENTRE of that layer's rectangle: x + w/2, y + h/2 (default pivot), and the layer's \`scale\`, \`rotation\` and \`opacity\` apply (scale the drawing, rotate around the emitter). Its PNG is only a still preview: do not draw it in the game, play the effect instead.
+
+## Use it
+\`\`\`js
+const fx = await (await fetch('fx.json')).json();
+const e = fx.effects['fx explosion 1'];                // or any name
+const img = new Image(); img.src = e.sprite; await img.decode();
+const boom = new LayerforgeFX.System(e, img, 1234);     // 3rd argument = random seed (omit to use e.seed)
+// every frame:
+boom.update(dt);                                        // dt in seconds
+boom.draw(ctx, x, y, 1, 1);                             // ctx, emitter x, y, scale, opacity
+if (boom.done) { /* burst finished: remove it */ }      // loops (mode "loop") never finish; stop drawing them yourself
+\`\`\`
+For a new play of the same effect, make a new \`System\` (or call \`boom.reset()\`). Use a different seed for variety.
+
+## Settings (in each effect)
+- \`mode\`: "burst" (emits \`count\` particles over \`burstTime\` seconds, then ends) or "loop" (emits \`rate\` per second forever)
+- \`lifeMin/lifeMax\` seconds; \`speedMin/speedMax\` pixels per second; \`angle\` degrees (0 = right, -90 = up, 90 = down) and \`spread\` degrees around it (360 = every direction); \`gravity\` pixels/second² (positive = down); \`drag\` per second
+- \`sizeMin/sizeMax\` pixels (width at birth); \`endScale\` size multiplier at death; \`alpha0\` to \`alpha1\` fade over life; \`spinMin/spinMax\` degrees per second; \`face\` true = turn to face the direction of travel; \`radius\` = emitter size (particles start inside this circle)
+- \`color0\` to \`color1\` colour over life (\`tint\` false = use the sprite's own colours); \`multi\` = a list of colours, each particle picks one; \`blend\` "add" (glow, drawn with lighter) or "normal"
+- \`seed\`: random scatter. Pixels are scene pixels (the scene is usually 3840 x 2160); scale them with your draw scale.
+`;
+
+window.__lf={fxs,fxRoll,fxMutate,fxOpen,fxClose,fxAddLayer,fxUpdateLayer,fxPlay,fxPlaying,fxOk,fxPoster,FXE,FXR,fxClean,fxExportEntries,fxLoad,shapeCreate,shapeLive,shapeCommit,shapeOk,renderShape,get sdrag(){return sdrag},cornersFlat,autoWandLayer,autoBgSel,planParse,openPlan,finishPlans,cropRef,syncChildren,tcache,finishPick,startPick,detachLayer,get pickPar(){return pickPar},dupLayer,makeVariants,feelPreview,feelApply,feelCancel,get fs(){return fs},get gb(){return gb},set gb(v){gb=v;gbBtn();draw()},gbToggle,gbHit,gbPts,enqueueUpscale,flattenScene,mergeLayers,selIds,msel,rdCut,get rd(){return rd},rdPaint,enqueueRedraw,getRefs,composePrompt,setRef,getRefs,cutRegion,get cs(){return cs},applyCut,state,store,view,brush,applyWand,cfg,jobs,enqueue,setTool,addBlank,importFiles,saveZip,zipBuild,zipRead,edit,undo,redo,fit}; // handy for debugging
 (async()=>{
   $('#sname').value=state.name;$('#sname').style.width='10ch';
   if(innerWidth<1000)document.body.classList.add('noside');
