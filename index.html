@@ -3218,19 +3218,28 @@ function lfAnimEngine(){
     layers.forEach(function(L){var l=L.anim&&L.anim[clip];if(l)l.forEach(function(m){if(m.mute)return;if(ONCE[m.k])end=Math.max(end,(m.dl||0)+Math.max(.05,m.dur==null?.5:m.dur));else loop=true})});
     return{loop:loop,end:end};
   }
+  // which of the 5 drawn directions a movement needs (dx, dy: screen axes, y points down) and whether to mirror it
+  function direction(dx,dy){
+    if(!dx&&!dy)return{dir:'down',flip:false};
+    var i=((Math.round(Math.atan2(dy,dx)*180/Math.PI/45)%8)+8)%8; // 0 right, 1 down-right, 2 down, 3 down-left, 4 left, 5 up-left, 6 up, 7 up-right
+    return[{dir:'side',flip:false},{dir:'diag down',flip:false},{dir:'down',flip:false},{dir:'diag down',flip:true},{dir:'side',flip:true},{dir:'diag up',flip:true},{dir:'up',flip:false},{dir:'diag up',flip:false}][i];
+  }
   // for the game: load(scene.json contents) gives an object that draws any clip at time t
   function load(sc){
-    var L=(sc.layers||[]).map(function(l){return{id:l.file,par:l.parent||null,x:l.x,y:l.y,w:l.w,h:l.h,scale:l.scale==null?1:l.scale,rot:l.rotation||0,px:l.pivot?l.pivot.x:.5,py:l.pivot?l.pivot.y:.5,op:l.opacity==null?1:l.opacity,vis:l.visible!==false,z:l.z||0,anim:l.anim}}).sort(function(a,b){return a.z-b.z});
+    var L=(sc.layers||[]).map(function(l){return{id:l.file,name:String(l.name||''),par:l.parent||null,x:l.x,y:l.y,w:l.w,h:l.h,scale:l.scale==null?1:l.scale,rot:l.rotation||0,px:l.pivot?l.pivot.x:.5,py:l.pivot?l.pivot.y:.5,op:l.opacity==null?1:l.opacity,vis:l.visible!==false,z:l.z||0,anim:l.anim}}).sort(function(a,b){return a.z-b.z});
     return{
       layers:L,
       clips:function(){return clips(L)},
       info:function(c){return info(L,c)},
       frame:function(c,t){return frame(L,c,t)},
-      // images = { "01-body.png": Image, ... }; o = { x, y (where on the canvas), scale, flip, origin:[sceneX, sceneY] (this scene point lands on x, y; e.g. the feet), group:"01-body.png" (draw only this layer and the parts attached to it) }
+      // a character drawn in several directions ("player down", "player up", "player side", "player diag down", "player diag up"):
+      // pick("player", moveX, moveY) -> { group, flip, dir } ready for draw(); null if that direction's layer does not exist
+      pick:function(prefix,dx,dy){var d=direction(dx,dy),want=(prefix+' '+d.dir).toLowerCase(),g=null;L.forEach(function(l){if(!l.par&&l.name.toLowerCase()===want)g=l.id});return g?{group:g,flip:d.flip,dir:d.dir}:null},
+      // images = { "01-body.png": Image, ... }; o = { x, y (where on the canvas), scale, flip, rotate (degrees), origin:[sceneX, sceneY] (this scene point lands on x, y; e.g. the feet), group:"01-body.png" (draw only this layer and the parts attached to it) }
       draw:function(ctx,images,clip,t,o){
         o=o||{};var fr=frame(L,clip,t),keep=null,i,org=o.origin||[0,0];
         if(o.group){keep={};keep[o.group]=1;for(var n=0;n<4;n++)L.forEach(function(l){if(l.par&&keep[l.par])keep[l.id]=1})}
-        ctx.save();ctx.translate(o.x||0,o.y||0);ctx.scale((o.scale||1)*(o.flip?-1:1),o.scale||1);ctx.translate(-org[0],-org[1]);
+        ctx.save();ctx.translate(o.x||0,o.y||0);if(o.rotate)ctx.rotate(o.rotate*Math.PI/180);ctx.scale((o.scale||1)*(o.flip?-1:1),o.scale||1);ctx.translate(-org[0],-org[1]);
         for(i=0;i<L.length;i++){
           var l=L[i];if(!l.vis||(keep&&!keep[l.id]))continue;var img=images[l.id];if(!img)continue;
           var m=fr[i].m;ctx.save();ctx.globalAlpha=Math.max(0,Math.min(1,fr[i].op));ctx.transform(m[0],m[1],m[2],m[3],m[4],m[5]);ctx.drawImage(img,0,0,l.w,l.h);ctx.restore();
@@ -3239,7 +3248,7 @@ function lfAnimEngine(){
       }
     };
   }
-  return{frame:frame,info:info,clips:clips,load:load,version:1};
+  return{frame:frame,info:info,clips:clips,load:load,direction:direction,version:2};
 }
 const ENGA=lfAnimEngine();
 const ANE=['out','in','inout','back','bounce','linear'],AND=['left','right','top','bottom'];
@@ -3274,7 +3283,7 @@ function animCleanM(o){
 function animCleanAll(a){const out={};if(a&&typeof a==='object')for(const c of Object.keys(a).slice(0,24)){if(!Array.isArray(a[c]))continue;const l=a[c].slice(0,24).map(animCleanM).filter(Boolean);if(l.length)out[String(c).slice(0,24)]=l}return Object.keys(out).length?out:undefined}
 const animClone=a=>a?JSON.parse(JSON.stringify(a)):{};
 var ans={open:false,clip:'',playing:true,t:0,last:0,speed:1,solo:false,sel:0,rig:{style:'walk',F:1.2,swing:28,bounce:4},extra:new Set()};
-const ANROLES=[['','– none –'],['body','body'],['head','head'],['arm','arm (a)'],['arm2','arm (b)'],['leg','leg (a)'],['leg2','leg (b)'],['tail','tail'],['wing','wing (a)'],['wing2','wing (b)'],['extra','floppy bit']];
+const ANROLES=[['','– none –'],['body','body'],['head','head'],['arm','arm (a)'],['arm2','arm (b)'],['leg','leg (a)'],['leg2','leg (b)'],['tail','tail'],['wing','wing (a)'],['wing2','wing (b)'],['extra','floppy bit'],['fixed','stays with body']];
 const ANR={walk:{F:[.7,1.6],swing:[18,40],bounce:[2,8]},run:{F:[1.3,2.4],swing:[28,50],bounce:[5,12]},idle:{F:[.25,.7],swing:[3,8],bounce:[0,2]},fly:{F:[1.5,3.5],swing:[25,50],bounce:[1,5]},hop:{F:[.7,1.4],swing:[8,20],bounce:[20,50]}};
 const anLayer=()=>sel();
 function anFamily(){const L=sel();if(!L)return[];const root=(L.par&&state.layers.find(p=>p.id===L.par))||L;return [root,...state.layers.filter(c=>c.par===root.id)]}
@@ -3323,18 +3332,34 @@ function rigMotions(style,role,P){
   }else{ // hop
     S={body:[m('hop',bn,F,0)],head:[m('tilt',4,F,.3)],arm:[m('tilt',sw,F,.15)],arm2:[m('tilt',sw,F,.65)],leg:[m('tilt',sw*.8,F,0)],leg2:[m('tilt',sw*.8,F,0)],tail:[m('tilt',10,F,.4)],wing:[m('tilt',8,F,.2)],wing2:[m('tilt',8,F,.7)],extra:[m('tilt',8,F,.35)]};
   }
-  return (S[role]||[]).filter(Boolean);
+  return (S[role]||[]).filter(Boolean); // 'fixed' parts have no motion of their own: they ride on the body
 }
 function rigApply(){
   const fam=anFamily().filter(p=>p.role);if(!fam.length)return;
   edit(()=>{for(const p of fam){const a=animClone(p.anim),l=rigMotions(ans.rig.style,p.role,ans.rig);if(l.length)a[ans.clip]=l;else delete a[ans.clip];if(Object.keys(a).length)p.anim=a;else delete p.anim}},'rig');
+}
+function anOtherChars(){const root=anFamily()[0];return state.layers.filter(l=>!l.par&&(!root||l.id!==root.id)&&state.layers.some(c=>c.par===l.id))}
+function anCopyClip(to){
+  const src=anFamily(),clip=ans.clip;if(!src.length)return;
+  if(!src.some(p=>p.anim&&p.anim[clip]))return toast('this clip has no motions on this character yet','warn');
+  const others=anOtherChars(),targets=to==='*'?others:others.filter(r=>r.id===to);if(!targets.length)return toast('no other character to copy to (parts must be attached with ⛓)','warn');
+  const suf=(p,root)=>p.name.toLowerCase().replace(root.name.toLowerCase(),'').trim();let n=0;
+  edit(()=>{for(const R of targets){
+    const kids=state.layers.filter(c=>c.par===R.id),used=new Set();
+    for(const sp of src){
+      const tp=sp===src[0]?R:(kids.find(q=>!used.has(q.id)&&sp.role&&q.role===sp.role)||kids.find(q=>!used.has(q.id)&&suf(q,R)===suf(sp,src[0])));
+      if(!tp)continue;used.add(tp.id);const a=animClone(tp.anim);
+      if(sp.anim&&sp.anim[clip])a[clip]=animClone(sp.anim)[clip];else delete a[clip];
+      if(Object.keys(a).length)tp.anim=a;else delete tp.anim;n++;
+    }}},'copyclip');
+  toast('copied "'+clip+'" to '+targets.length+' character'+(targets.length>1?'s':'')+' ('+n+' parts matched by role or name) · check each one plays, and set their pivots','good');
 }
 function rigRoll(){const R=ANR[ans.rig.style];for(const k of ['F','swing','bounce'])ans.rig[k]=Math.round(anRnd(R[k][0],R[k][1])*100)/100;rigApply()}
 function anGuess(){
   const fam=anFamily(),cnt={};
   edit(()=>{fam.forEach((p,i)=>{
     const n=p.name.toLowerCase();let r='';
-    if(/head|face|skull|helmet/.test(n))r='head';else if(/arm|hand|shoulder/.test(n))r='arm';else if(/leg|foot|feet|shoe|boot|thigh|knee/.test(n))r='leg';else if(/tail/.test(n))r='tail';else if(/wing/.test(n))r='wing';else if(/body|torso|chest|main|trunk/.test(n)||i===0)r='body';else r='extra';
+    if(/head|face|skull|helmet/.test(n))r='head';else if(/arm|hand|shoulder/.test(n))r='arm';else if(/leg|foot|feet|shoe|boot|thigh|knee/.test(n))r='leg';else if(/tail/.test(n))r='tail';else if(/wing/.test(n))r='wing';else if(/shirt|number|kit|jersey|badge|stripe|logo/.test(n))r='fixed';else if(/body|torso|chest|main|trunk/.test(n)||i===0)r='body';else r='extra';
     if(r==='arm'||r==='leg'||r==='wing'){
       const right=/right|(^|[ _-])r($|[ _-])/.test(n),left=/left|(^|[ _-])l($|[ _-])/.test(n);
       cnt[r]=(cnt[r]||0)+1;r=right?r+'2':left?r:(cnt[r]%2===0?r+'2':r);
@@ -3350,7 +3375,7 @@ function anBBox(id){
 function anPivots(){
   const fam=anFamily(),root=fam[0];if(!root)return;
   edit(()=>{for(const p of fam){
-    if(!p.role)continue;const b=anBBox(p.id);if(!b)continue;const cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2,h=b.y1-b.y0;let px=cx,py=cy;
+    if(!p.role||p.role==='fixed')continue;const b=anBBox(p.id);if(!b)continue;const cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2,h=b.y1-b.y0;let px=cx,py=cy;
     if(p.role==='body'){py=b.y1-h*.02}
     else if(p.role==='head'){py=b.y1-h*.06}
     else if(p.role==='arm'||p.role==='arm2'||p.role==='leg'||p.role==='leg2'){py=b.y0+h*.05}
@@ -3381,7 +3406,9 @@ function anBuild(){
   <div class="fxbig"><button class="sm" id="anguess" title="guess a role for each part from its name">guess roles</button><button class="sm" id="anpiv" title="put every part's pivot at its joint (hip, shoulder, neck…); ctrl+z undoes it">set pivots</button></div>
   <div class="fxbig"><select id="anstyle" aria-label="style">${Object.keys(ANR).map(k=>`<option>${k}</option>`).join('')}</select><button class="btn-clay" id="anrigroll" title="random speed, swing and bounce, then rebuild the motions">🎲 roll</button></div>
   ${[['F','speed','cycles/s',.1,4,.05],['swing','swing','°',0,70,.5],['bounce','bounce','%',0,60,.5]].map(a=>`<div class="fxrow"><label>${a[1]}</label><input type="range" min="${a[3]}" max="${a[4]}" step="${a[5]}" data-rg="${a[0]}" aria-label="${a[1]}"><input type="number" class="fxn" data-rgn="${a[0]}" step="any" aria-label="${a[1]} (type a number)"></div>`).join('')}
-  <div class="dim">style and sliders rebuild the motions of every part that has a role (your hand-tweaks on those parts are replaced)</div></div>`;
+  <div class="dim">style and sliders rebuild the motions of every part that has a role (your hand-tweaks on those parts are replaced)</div>
+  <div class="fxh" style="margin-top:14px">$ copy clip</div>
+  <div class="fxbig"><select id="ancopyto" aria-label="copy to"></select><button class="sm" id="ancopy" title="copy this clip's motions to the other character(s): parts are matched by role, else by name (player side shirt ↔ player down shirt)">copy →</button></div></div>`;
 }
 anBuild();
 function anRefresh(){
@@ -3412,6 +3439,7 @@ function anRefresh(){
   const root=fam[0],kids=fam.length>1;
   $('#anrighint').textContent=!L?'':kids?'parts of "'+root.name+'": give each a role, set pivots, pick a style':'this layer has no attached parts. Cut parts out with "attach to original" ticked (or ⛓ attach in the layers panel), then they show up here';
   $('#anparts').innerHTML=kids?fam.map(p=>`<div class="fxrow"><label title="${esc(p.name)}" class="anpn">${esc(p.name)}</label><select data-role="${p.id}" aria-label="role of ${esc(p.name)}">${ANROLES.map(r=>`<option value="${r[0]}"${(p.role||'')===r[0]?' selected':''}>${r[1]}</option>`).join('')}</select></div>`).join(''):'';
+  {const oc=anOtherChars(),cv=$('#ancopyto').value;$('#ancopyto').innerHTML=oc.length?`<option value="*">all other characters (${oc.length})</option>`+oc.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join(''):'<option value="">no other character</option>';if([...$('#ancopyto').options].some(o=>o.value===cv))$('#ancopyto').value=cv;$('#ancopy').disabled=!oc.length}
   $('#anguess').disabled=$('#anpiv').disabled=$('#anrigroll').disabled=!kids;
   $('#anstyle').value=ans.rig.style;
   for(const k of ['F','swing','bounce']){const sl=$(`[data-rg="${k}"]`),nn=$(`[data-rgn="${k}"]`);if(sl!==A)sl.value=ans.rig[k];if(nn!==A)nn.value=Math.round(ans.rig[k]*1000)/1000}
@@ -3451,6 +3479,7 @@ ANP.addEventListener('click',e=>{
   if(b.id==='anaddclip'){const n=slug($('#annew').value).slice(0,24);if(!n)return toast('type a name for the clip first','warn');ans.extra.add(n);ans.clip=n;ans.sel=0;$('#annew').value='';anRefresh();return}
   if(b.id==='andelclip'){const c=ans.clip;if(!c)return;edit(()=>{for(const l of state.layers)if(l.anim&&l.anim[c]){const a=animClone(l.anim);delete a[c];if(Object.keys(a).length)l.anim=a;else delete l.anim}});ans.extra.delete(c);ans.clip=ENGA.clips(state.layers)[0]||'idle';ans.sel=0;anRefresh();return}
   if(b.id==='anguess'){anGuess();return}
+  if(b.id==='ancopy'){anCopyClip($('#ancopyto').value);return}
   if(b.id==='anpiv'){anPivots();return}
   if(b.id==='anrigroll'){rigRoll();anRefresh();return}
   if(!L)return;
@@ -3464,7 +3493,7 @@ ANP.addEventListener('click',e=>{
 for(const ev of ['pointerdown','pointermove','pointerup','wheel','keydown','keyup','dblclick','contextmenu'])ANP.addEventListener(ev,e=>e.stopPropagation());
 $('#tab-anim').onclick=()=>{ans.open?animClose():animOpen()};
 /* ----- saving for the game: scene.json carries each layer's anim and role; anim.js plays them ----- */
-const ANIM_RUNTIME=()=>`/* Layerforge animation runtime. Browser canvas 2D, no dependencies. See ANIM-README.md.\n   Usage: const rig = LayerforgeAnim.load(sceneJson) ; rig.draw(ctx, images, "walk", timeSeconds, {x, y, scale, flip, origin, group}) */\n(function(root){\nvar LayerforgeAnim=(${lfAnimEngine.toString()})();\nif(typeof module!=='undefined'&&module.exports)module.exports=LayerforgeAnim;else root.LayerforgeAnim=LayerforgeAnim;\n})(typeof window!=='undefined'?window:this);\n`;
+const ANIM_RUNTIME=()=>`/* Layerforge animation runtime. Browser canvas 2D, no dependencies. See ANIM-README.md.\n   Usage: const rig = LayerforgeAnim.load(sceneJson) ; rig.draw(ctx, images, "walk", timeSeconds, {x, y, scale, flip, rotate, origin, group}) ; rig.pick("player", dx, dy) */\n(function(root){\nvar LayerforgeAnim=(${lfAnimEngine.toString()})();\nif(typeof module!=='undefined'&&module.exports)module.exports=LayerforgeAnim;else root.LayerforgeAnim=LayerforgeAnim;\n})(typeof window!=='undefined'?window:this);\n`;
 const ANIM_README=`# Layerforge animations for the game
 
 Motions are made in the app's anim tab and saved as plain numbers inside \`scene.json\`, on each layer: \`"anim": { "walk": [ {"k":"tilt","a":28,"f":1.2,"ph":0.5,"b":0,"dl":0}, ... ], "idle": [ ... ] }\`. A clip (\`walk\`, \`idle\`, \`hit\`...) is a name; every layer that has motions under that name takes part. Layers also carry \`parent\` (the file of the layer they are attached to) and \`role\` (body, head, arm, arm2, leg, leg2, tail, wing, wing2, extra) for puppet characters.
@@ -3483,7 +3512,8 @@ rig.draw(ctx, images, 'walk', t, { x: 400, y: 600, scale: 0.5, flip: false, orig
 - \`origin\` is a point in SCENE pixels (the character's feet, say) that lands on canvas position \`x, y\`; \`scale\` and \`flip\` (face left) apply around it. \`group\` draws only that layer and the parts attached to it, so several characters in one scene can be drawn separately. Without \`group\` every layer is drawn.
 - Looping motions (bob, sway, tilt, breathe, pulse, bounce, hop, spin, orbit, shake, wiggle, flicker) repeat forever. One-shot motions (fadein, fadeout, slidein, popin, dropin) finish and hold their end state. \`rig.info('walk')\` gives \`{loop, end}\`: whether anything loops, and when the one-shots end.
 - Need the numbers instead? \`rig.frame('walk', t)\` returns, for every layer in z order, \`{id, m:[a,b,c,d,e,f], op}\`: the canvas matrix that maps the layer's picture (0..w, 0..h) into the scene, and its final opacity. Use it with any renderer.
-- Switch clips by changing the name; restart a clip by setting \`t\` to 0.
+- Switch clips by changing the name; restart a clip by setting \`t\` to 0. \`rotate\` (degrees) turns the whole character around its origin.
+- Characters drawn facing several ways: name the root layers like \`player down\`, \`player up\`, \`player side\`, \`player diag down\`, \`player diag up\` (side and diagonals are drawn facing right; parts such as the shirt and number are attached to each root). Then \`const p = rig.pick('player', moveX, moveY)\` gives \`{group, flip, dir}\` for any of the 8 directions (the left-facing three are the right-facing ones mirrored), and you draw with \`{ group: p.group, flip: p.flip, ... }\`. \`LayerforgeAnim.direction(dx, dy)\` alone gives \`{dir, flip}\`. Give every direction the same clip names (the anim tab can copy a clip to the other characters).
 
 ## Motion settings
 \`k\` kind; \`a\` amount (height / distance / radius / strength / depth in % of the layer's own height or width, angle in degrees for tilt and wiggle); \`f\` speed in cycles per second (spin: turns per second, negative = the other way); \`ph\` offset 0-1 of a cycle; \`b\` rest offset (same unit as the amount, for bob, sway and tilt); \`dl\` seconds before it starts; \`mute\` true = skipped. One-shot motions use \`dur\` (seconds it takes) and \`e\` (easing: out, in, inout, back, bounce, linear); slidein also has \`d\` (left, right, top, bottom: where it comes from).
@@ -3492,7 +3522,7 @@ function animExportEntries(list){
   if(!list.some(l=>l.anim))return[];const enc=new TextEncoder();
   return[{name:'anim.js',data:enc.encode(ANIM_RUNTIME())},{name:'ANIM-README.md',data:enc.encode(ANIM_README)}];
 }
-window.__lf={ans,ENGA,animOpen,animClose,rigMotions,rigApply,rigRoll,anGuess,anPivots,animCleanAll,anRefresh,animFrameNow,sfxRoll,sfxMutate,sfxClean,fxAudio,fxs,fxRoll,fxMutate,fxOpen,fxClose,fxAddLayer,fxUpdateLayer,fxPlay,fxPlaying,fxOk,fxPoster,FXE,FXR,fxClean,fxExportEntries,fxLoad,shapeCreate,shapeLive,shapeCommit,shapeOk,renderShape,get sdrag(){return sdrag},cornersFlat,autoWandLayer,autoBgSel,planParse,openPlan,finishPlans,cropRef,syncChildren,tcache,finishPick,startPick,detachLayer,get pickPar(){return pickPar},dupLayer,makeVariants,feelPreview,feelApply,feelCancel,get fs(){return fs},get gb(){return gb},set gb(v){gb=v;gbBtn();draw()},gbToggle,gbHit,gbPts,enqueueUpscale,flattenScene,mergeLayers,selIds,msel,rdCut,get rd(){return rd},rdPaint,enqueueRedraw,getRefs,composePrompt,setRef,getRefs,cutRegion,get cs(){return cs},applyCut,state,store,view,brush,applyWand,cfg,jobs,enqueue,setTool,addBlank,importFiles,saveZip,zipBuild,zipRead,edit,undo,redo,fit}; // handy for debugging
+window.__lf={anCopyClip,ans,ENGA,animOpen,animClose,rigMotions,rigApply,rigRoll,anGuess,anPivots,animCleanAll,anRefresh,animFrameNow,sfxRoll,sfxMutate,sfxClean,fxAudio,fxs,fxRoll,fxMutate,fxOpen,fxClose,fxAddLayer,fxUpdateLayer,fxPlay,fxPlaying,fxOk,fxPoster,FXE,FXR,fxClean,fxExportEntries,fxLoad,shapeCreate,shapeLive,shapeCommit,shapeOk,renderShape,get sdrag(){return sdrag},cornersFlat,autoWandLayer,autoBgSel,planParse,openPlan,finishPlans,cropRef,syncChildren,tcache,finishPick,startPick,detachLayer,get pickPar(){return pickPar},dupLayer,makeVariants,feelPreview,feelApply,feelCancel,get fs(){return fs},get gb(){return gb},set gb(v){gb=v;gbBtn();draw()},gbToggle,gbHit,gbPts,enqueueUpscale,flattenScene,mergeLayers,selIds,msel,rdCut,get rd(){return rd},rdPaint,enqueueRedraw,getRefs,composePrompt,setRef,getRefs,cutRegion,get cs(){return cs},applyCut,state,store,view,brush,applyWand,cfg,jobs,enqueue,setTool,addBlank,importFiles,saveZip,zipBuild,zipRead,edit,undo,redo,fit}; // handy for debugging
 (async()=>{
   $('#sname').value=state.name;$('#sname').style.width='10ch';
   if(innerWidth<1000)document.body.classList.add('noside');
