@@ -77,6 +77,7 @@ body.noside #side{display:none}
 .fxem.on .emn{border-color:var(--clay);color:var(--clay-text)}.fxem.off .emn{opacity:.45}.fxem .sm{height:34px;min-width:34px;padding:0 6px;border:1px solid var(--line)}.fxem .sm:disabled{opacity:.3}
 .fxn{width:66px;flex-shrink:0;background:var(--bg);border:1px solid var(--line);border-radius:5px;color:var(--text);font:inherit;text-align:right;padding:4px 6px;height:30px}.fxn:focus{border-color:var(--clay);outline:none}.fxu{width:28px;flex-shrink:0}
 .fxwait{display:flex;align-items:center;gap:8px;margin:0 0 5px 14px;padding-left:10px;border-left:2px solid var(--line);min-height:30px;color:var(--dim)}.fxwait .ck{display:flex;gap:6px;align-items:center;color:var(--text)}
+.fxbig .ck{display:flex;gap:6px;align-items:center;white-space:nowrap;color:var(--text)}#snd summary{cursor:pointer;min-height:36px;display:flex;align-items:center;margin:4px 0}
 #fxp{position:absolute;inset:0;display:none;background:var(--bg);z-index:30;grid-template-columns:minmax(0,1fr) 370px;min-height:0}
 #fxp.show{display:grid}
 #fxv{position:relative;min-width:0;min-height:0;border-right:1px solid var(--line)}
@@ -2625,19 +2626,96 @@ function lfFxEngine(){
     var L=p.lifeMax,d=p.drag,sp=p.speedMax,dist=d>0.01?sp*(1-Math.exp(-d*L))/d:sp*L,g2=Math.abs(p.gravity)*L*L/2,g=d>0.01?Math.min(g2,Math.abs(p.gravity)/d*L):g2;
     return Math.max(64,Math.min(900,p.radius+dist+g+p.sizeMax*Math.max(1,p.endScale)));
   }
+  // ---- sound: sfxr-style synth (renders a recipe of numbers to samples; 44100 Hz mono) ----
+  var AUDIO=null;
+  var SFX=(function(){
+    function render(p){
+      function n(k,d){var x=p[k];return typeof x==='number'&&isFinite(x)?x:d}
+      var a_=(n('seed',1)>>>0)||1;function rnd(){a_=(a_+0x6D2B79F5)>>>0;var t=a_;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296}
+      var wave=Math.max(0,Math.min(3,Math.round(n('wave',0)))),baseFreq=n('freq',.3),freqLimit=n('limit',0),freqRamp=n('ramp',0),freqDramp=n('dramp',0),
+        duty=n('duty',0),dutyRamp=n('dutyR',0),vibStr=n('vibS',0),vibSpd=n('vibF',0),envA=n('attack',0),envS=n('sustain',.3),envP=n('punch',0),envD=n('decay',.4),
+        lpf=n('lpf',1),lpfR=n('lpfR',0),lpfQ=n('lpfQ',0),hpf=n('hpf',0),hpfR=n('hpfR',0),phaO=n('phaO',0),phaR=n('phaR',0),rep=n('rep',0),arpS=n('arpS',0),arpM=n('arpM',0),vol=n('vol',.5);
+      var fperiod,fmaxperiod,fslide,fdslide,period,sqDuty,sqSlide,arpMod,arpTime,arpLimit,fltw=0,fltwd=1,fltdmp=0,flthp=0,flthpd=1,fltp=0,fltdp=0,fltphp=0,
+        vibPhase=0,vibSpeed=0,vibAmp=0,envStage=0,envTime=0,envLen=[0,0,0],envVol=0,fphase=0,fdphase=0,iphase=0,ipp=0,phaser=new Float32Array(1024),noise=new Float32Array(32),repTime=0,repLimit=0,phase=0,i;
+      function reset(full){
+        fperiod=100/(baseFreq*baseFreq+.001);period=fperiod|0;fmaxperiod=100/(freqLimit*freqLimit+.001);
+        fslide=1-Math.pow(freqRamp,3)*.01;fdslide=-Math.pow(freqDramp,3)*1e-6;
+        sqDuty=.5-duty*.5;sqSlide=-dutyRamp*5e-5;
+        arpMod=arpM>=0?1-Math.pow(arpM,2)*.9:1+Math.pow(arpM,2)*10;
+        arpTime=0;arpLimit=arpS===1?0:((Math.pow(1-arpS,2)*20000+32)|0);
+        if(full){
+          fltw=Math.pow(lpf,3)*.1;fltwd=1+lpfR*1e-4;fltdmp=5/(1+Math.pow(lpfQ,2)*20)*(.01+fltw);if(fltdmp>.8)fltdmp=.8;
+          flthp=Math.pow(hpf,2)*.1;flthpd=1+hpfR*3e-4;
+          vibPhase=0;vibSpeed=Math.pow(vibSpd,2)*.01;vibAmp=vibStr*.5;
+          envVol=0;envStage=0;envTime=0;envLen=[(envA*envA*1e5)|0,(envS*envS*1e5)|0,(envD*envD*1e5)|0];
+          fphase=Math.pow(phaO,2)*1020;if(phaO<0)fphase=-fphase;fdphase=Math.pow(phaR,2);if(phaR<0)fdphase=-fdphase;
+          iphase=Math.abs(fphase|0);ipp=0;for(i=0;i<1024;i++)phaser[i]=0;
+          for(i=0;i<32;i++)noise[i]=rnd()*2-1;
+          repTime=0;repLimit=rep===0?0:((Math.pow(1-rep,2)*20000+32)|0);
+        }
+      }
+      reset(true);
+      var maxN=44100*4,buf=new Float32Array(maxN),N=0;
+      while(N<maxN){
+        if(repLimit!==0&&++repTime>=repLimit){repTime=0;reset(false)}
+        if(arpLimit!==0&&++arpTime>=arpLimit){arpLimit=0;fperiod*=arpMod}
+        fslide+=fdslide;fperiod*=fslide;
+        if(fperiod>fmaxperiod){fperiod=fmaxperiod;if(freqLimit>0)break}
+        var rfp=fperiod;if(vibAmp>0){vibPhase+=vibSpeed;rfp=fperiod*(1+Math.sin(vibPhase)*vibAmp)}
+        period=rfp|0;if(period<8)period=8;
+        sqDuty+=sqSlide;if(sqDuty<0)sqDuty=0;if(sqDuty>.5)sqDuty=.5;
+        if(++envTime>envLen[envStage]){envTime=0;envStage++;if(envStage>2)break}
+        if(envStage===0)envVol=envLen[0]?envTime/envLen[0]:1;
+        else if(envStage===1)envVol=1+(envLen[1]?1-envTime/envLen[1]:0)*2*envP;
+        else envVol=envLen[2]?1-envTime/envLen[2]:0;
+        fphase+=fdphase;iphase=Math.min(Math.abs(fphase|0),1023);
+        if(flthpd!==0){flthp*=flthpd;if(flthp<1e-5)flthp=1e-5;if(flthp>.1)flthp=.1}
+        var ss=0;
+        for(var si=0;si<8;si++){
+          var sp,pp;phase++;
+          if(phase>=period){phase%=period;if(wave===3)for(i=0;i<32;i++)noise[i]=rnd()*2-1}
+          var fp=phase/period;
+          sp=wave===0?(fp<sqDuty?.5:-.5):wave===1?1-fp*2:wave===2?Math.sin(fp*6.283185):noise[(phase*32/period)|0];
+          pp=fltp;fltw*=fltwd;if(fltw<0)fltw=0;if(fltw>.1)fltw=.1;
+          if(lpf!==1){fltdp+=(sp-fltp)*fltw;fltdp-=fltdp*fltdmp}else{fltp=sp;fltdp=0}
+          fltp+=fltdp;
+          fltphp+=fltp-pp;fltphp-=fltphp*flthp;sp=fltphp;
+          phaser[ipp&1023]=sp;sp+=phaser[(ipp-iphase+1024)&1023];ipp=(ipp+1)&1023;
+          ss+=sp*envVol;
+        }
+        ss=Math.tanh(ss/8*vol*.9);
+        buf[N++]=ss;
+      }
+      return buf.slice(0,Math.max(N,1));
+    }
+    function wav(p){
+      var s=render(p),n=s.length,b=new Uint8Array(44+n*2),v=new DataView(b.buffer),i;
+      function w(o,t){for(var j=0;j<t.length;j++)v.setUint8(o+j,t.charCodeAt(j))}
+      w(0,'RIFF');v.setUint32(4,36+n*2,true);w(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,44100,true);v.setUint32(28,88200,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,n*2,true);
+      for(i=0;i<n;i++)v.setInt16(44+i*2,Math.round(Math.max(-1,Math.min(1,s[i]))*32767),true);
+      return b;
+    }
+    var cache={},keys=[];
+    function key(p){var q={};for(var k in p)if(k!=='at'&&k!=='mute'&&k!=='preset'&&k!=='file')q[k]=p[k];return JSON.stringify(q)}
+    function buffer(ctx,p){var k=key(p),b=cache[k];if(!b){var d=render(p);b=ctx.createBuffer(1,d.length,44100);if(b.copyToChannel)b.copyToChannel(d,0);else b.getChannelData(0).set(d);cache[k]=b;keys.push(k);if(keys.length>40)delete cache[keys.shift()]}return b}
+    function play(ctx,p){var src=ctx.createBufferSource();src.buffer=buffer(ctx,p);src.connect(ctx.destination);src.start(0);return src}
+    return {render:render,wav:wav,buffer:buffer,play:play};
+  })();
   // an Effect = a stack of emitters that play together; each emitter has its own settings, an optional start delay (seconds) and can be muted
   function Effect(effect,sprites,seed){
-    var em=effect.emitters||[effect],i;this.emitters=em;this.systems=[];this.t=0;this.starts=[];
+    var em=effect.emitters||[effect],i;this.emitters=em;this.systems=[];this.t=0;this.starts=[];this.sounds=effect.sounds||[];this.fired=[];this.onsound=null;
     for(i=0;i<em.length;i++)this.starts.push((i?this.starts[i-1]:0)+(em[i].delay||0)); // a part starts "delay" seconds after the part above it started
     for(i=0;i<em.length;i++)this.systems.push(em[i].mute||!sprites[i]?null:new System(em[i],sprites[i],seed==null?em[i].seed:seed+i*7919));
   }
-  Effect.prototype.reset=function(){this.t=0;for(var i=0;i<this.systems.length;i++)if(this.systems[i])this.systems[i].reset()};
+  Effect.prototype.reset=function(){this.t=0;this.fired=[];for(var i=0;i<this.systems.length;i++)if(this.systems[i])this.systems[i].reset()};
   Effect.prototype.update=function(dt){
     dt=Math.min(dt,.25);var t1=this.t+dt,i;
     for(i=0;i<this.systems.length;i++){var s=this.systems[i];if(!s)continue;var d=this.starts[i];if(t1<=d)continue;s.update(Math.min(dt,t1-d))}
     this.t=t1;
+    for(i=0;i<this.sounds.length;i++){var sn=this.sounds[i];if(!this.fired[i]&&!sn.mute&&t1>=(sn.at||0)){this.fired[i]=true;this.fire(sn,i)}}
   };
-  Object.defineProperty(Effect.prototype,'done',{get:function(){for(var i=0;i<this.systems.length;i++){var s=this.systems[i];if(!s)continue;if(this.t<this.starts[i]||!s.done)return false}return true}});
+  Effect.prototype.fire=function(sn,i){if(this.onsound)this.onsound(sn,i);else if(AUDIO)SFX.play(AUDIO,sn)};
+  Object.defineProperty(Effect.prototype,'done',{get:function(){for(var j=0;j<this.sounds.length;j++)if(!this.fired[j]&&!this.sounds[j].mute)return false;for(var i=0;i<this.systems.length;i++){var s=this.systems[i];if(!s)continue;if(this.t<this.starts[i]||!s.done)return false}return true}});
   Object.defineProperty(Effect.prototype,'count',{get:function(){var n=0;for(var i=0;i<this.systems.length;i++)if(this.systems[i])n+=this.systems[i].parts.length;return n}});
   Effect.prototype.draw=function(c,x,y,s,o){for(var i=0;i<this.systems.length;i++)if(this.systems[i])this.systems[i].draw(c,x,y,s,o)};
   // load every sprite of an effect from its "sprite" paths (base = folder prefix, e.g. "assets/") and give back a ready Effect
@@ -2645,7 +2723,7 @@ function lfFxEngine(){
     base=base||'';
     return Promise.all(effect.emitters.map(function(m){return new Promise(function(res,rej){var im=new Image();im.onload=function(){res(im)};im.onerror=function(){rej(new Error('could not load '+m.sprite))};im.src=base+m.sprite})})).then(function(imgs){return new Effect(effect,imgs)});
   }
-  return {System:System,Effect:Effect,reach:reach,load:load,version:2};
+  return {System:System,Effect:Effect,reach:reach,load:load,sfx:SFX,setAudio:function(c){AUDIO=c},version:3};
 }
 const FXE=lfFxEngine();
 
@@ -2700,7 +2778,7 @@ function fxClean(o,bs){
   p.spr=typeof o.spr==='string'&&(o.spr.startsWith('builtin:')||o.spr.startsWith('data:image/'))?o.spr:'builtin:soft';
   p.seed=Math.floor(Math.abs(+o.seed))||1;return p;
 }
-const fxCleanFx=(o,bs)=>({emitters:(Array.isArray(o.emitters)&&o.emitters.length?o.emitters:[o]).slice(0,8).map(e=>fxClean(e)),bs});
+const fxCleanFx=(o,bs)=>({emitters:(Array.isArray(o.emitters)&&o.emitters.length?o.emitters:[o]).slice(0,8).map(e=>fxClean(e)),sounds:(Array.isArray(o.sounds)?o.sounds:[]).slice(0,4).map(sfxClean),bs});
 const fxQ=(k,v)=>{const a=FXPK[k];if(!a)return v;const st=a[4],q=Math.round(v/st)*st;return +Math.min(a[3],Math.max(a[2],q)).toFixed(3)};
 function fxOk(l){if(!l.fx||!l.fx.emitters)return false;const r=store.get(l.id);return !!(r&&r.blob&&r.blob.size===l.fx.bs)}
 function fxStarts(em){let t=0;return em.map(e=>t+=(e.delay||0))}
@@ -2712,9 +2790,50 @@ async function fxPoster(fx){ // the still picture an effect layer shows: the eff
   const cv=document.createElement('canvas');cv.width=cv.height=W;sys.draw(cv.getContext('2d'),W/2,W/2,1);
   return {cv,W,H:W};
 }
+/* ----- sound: an sfxr-style generator (pick a type, roll until it sounds right) ----- */
+const SFP=[ // key, label, min, max, step, default
+  ['freq','pitch',0,1,.01,.3],['limit','pitch floor',0,1,.01,0],['ramp','pitch slide',-1,1,.01,0],['dramp','slide change',-1,1,.01,0],
+  ['vibS','vibrato depth',0,1,.01,0],['vibF','vibrato speed',0,1,.01,0],['arpM','arp jump',-1,1,.01,0],['arpS','arp speed',0,1,.01,0],
+  ['duty','square width',0,1,.01,0],['dutyR','width slide',-1,1,.01,0],
+  ['attack','attack',0,1,.01,0],['sustain','sustain',0,1,.01,.3],['punch','punch',0,1,.01,0],['decay','decay',0,1,.01,.4],
+  ['lpf','low-pass',0,1,.01,1],['lpfR','low-pass slide',-1,1,.01,0],['lpfQ','resonance',0,1,.01,0],['hpf','high-pass',0,1,.01,0],['hpfR','high-pass slide',-1,1,.01,0],
+  ['phaO','phaser',-1,1,.01,0],['phaR','phaser slide',-1,1,.01,0],['rep','repeat',0,1,.01,0],['vol','volume',0,1,.01,.5]];
+const SFWAVES=['square','saw','sine','noise'];
+const sr=()=>Math.random(),si=n=>Math.floor(Math.random()*(n+1)); // si(1) = 0 or 1, si(2) = 0..2 ... (like sfxr's rnd(n))
+const SFG={ // each makes a fresh random sound of its kind; anything not set stays at the default
+  coin(){const p={wave:0,freq:.4+sr()*.5,sustain:sr()*.1,decay:.1+sr()*.4,punch:.3+sr()*.3};if(si(1)){p.arpS=.5+sr()*.2;p.arpM=.2+sr()*.4}return p},
+  laser(){const p={wave:si(2)};if(p.wave===2&&si(1))p.wave=si(1);p.freq=.5+sr()*.5;p.limit=Math.max(.2,p.freq-.2-sr()*.6);p.ramp=-.15-sr()*.2;
+    if(si(2)===0){p.freq=.3+sr()*.6;p.limit=sr()*.1;p.ramp=-.35-sr()*.3}
+    if(si(1)){p.duty=sr()*.5;p.dutyR=sr()*.2}else{p.duty=.4+sr()*.5;p.dutyR=-sr()*.7}
+    p.sustain=.1+sr()*.2;p.decay=sr()*.4;if(si(1))p.punch=sr()*.3;if(si(2)===0){p.phaO=sr()*.2;p.phaR=-sr()*.2}if(si(1))p.hpf=sr()*.3;return p},
+  explosion(){const p={wave:3};if(si(1)){p.freq=.1+sr()*.4;p.ramp=-.1+sr()*.4}else{p.freq=.2+sr()*.7;p.ramp=-.2-sr()*.2}p.freq*=p.freq;if(si(4)===0)p.ramp=0;if(si(2)===0)p.rep=.3+sr()*.5;
+    p.sustain=.1+sr()*.3;p.decay=sr()*.5;if(si(1)===0){p.phaO=-.3+sr()*.9;p.phaR=-sr()*.3}p.punch=.2+sr()*.6;if(si(1)){p.vibS=sr()*.7;p.vibF=sr()*.6}if(si(2)===0){p.arpS=.6+sr()*.3;p.arpM=.8-sr()*1.6}return p},
+  powerup(){const p={wave:0};if(si(1))p.wave=1;else p.duty=sr()*.6;if(si(1)){p.freq=.2+sr()*.3;p.ramp=.1+sr()*.4;p.rep=.4+sr()*.4}else{p.freq=.2+sr()*.3;p.ramp=.05+sr()*.2;if(si(1)){p.vibS=sr()*.7;p.vibF=sr()*.6}}p.sustain=sr()*.4;p.decay=.1+sr()*.4;return p},
+  hit(){const p={wave:si(2)};if(p.wave===2)p.wave=3;if(p.wave===0)p.duty=sr()*.6;p.freq=.2+sr()*.6;p.ramp=-.3-sr()*.4;p.sustain=sr()*.1;p.decay=.1+sr()*.2;if(si(1))p.hpf=sr()*.3;return p},
+  jump(){const p={wave:0,duty:sr()*.6,freq:.3+sr()*.3,ramp:.1+sr()*.2,sustain:.1+sr()*.3,decay:.1+sr()*.2};if(si(1))p.hpf=sr()*.3;if(si(1))p.lpf=1-sr()*.6;return p},
+  blip(){const p={wave:si(1),freq:.2+sr()*.4,sustain:.1+sr()*.1,decay:sr()*.2,hpf:.1};if(p.wave===0)p.duty=sr()*.6;return p},
+  magic(){return {wave:2,freq:.45+sr()*.35,vibS:.3+sr()*.5,vibF:.3+sr()*.4,arpS:.5+sr()*.3,arpM:.3+sr()*.4,attack:.02+sr()*.1,sustain:.1+sr()*.3,decay:.3+sr()*.4,phaO:sr()*.4,phaR:-sr()*.3,punch:sr()*.2,hpf:.05}},
+  whoosh(){return {wave:3,freq:.15+sr()*.3,attack:.2+sr()*.2,sustain:.1+sr()*.2,decay:.3+sr()*.3,lpf:.3+sr()*.3,lpfR:.2+sr()*.5,lpfQ:sr()*.4,phaO:sr()*.3,hpf:.05}},
+  thud(){return {wave:2,freq:.12+sr()*.15,ramp:-.2-sr()*.3,sustain:sr()*.05,decay:.15+sr()*.2,punch:.4+sr()*.5,lpf:.4+sr()*.4}},
+  click(){return {wave:0,duty:sr()*.6,freq:.5+sr()*.3,sustain:sr()*.03,decay:.04+sr()*.1,hpf:.1+sr()*.2,punch:sr()*.3}},
+  chime(){const p={wave:2,freq:.5+sr()*.3,sustain:.05+sr()*.1,decay:.4+sr()*.3,punch:sr()*.2};if(si(1))p.rep=.5+sr()*.3;return p},
+  powerdown(){return {wave:si(2)===0?3:si(1),freq:.3+sr()*.3,ramp:-.2-sr()*.3,duty:sr()*.5,sustain:.1+sr()*.3,decay:.3+sr()*.4,vibS:si(1)?sr()*.5:0,vibF:sr()*.4}}
+};
+const SFDEF={preset:'coin',wave:0,...Object.fromEntries(SFP.map(a=>[a[0],a[5]])),seed:1,at:0,mute:false};
+function sfxClean(o){
+  o=o||{};const p={...SFDEF};
+  for(const a of SFP){const v=+o[a[0]];p[a[0]]=isFinite(v)&&o[a[0]]!==null&&o[a[0]]!==''?Math.min(a[3],Math.max(a[2],Math.round(v*1000)/1000)):a[5]}
+  p.wave=Math.max(0,Math.min(3,Math.round(+o.wave)||0));p.preset=SFG[o.preset]?o.preset:'coin';p.seed=Math.floor(Math.abs(+o.seed))||1;
+  p.at=Math.min(10,Math.max(0,Math.round((+o.at||0)*100)/100));p.mute=!!o.mute;return p;
+}
+function sfxRoll(kind,old){return sfxClean({...SFDEF,...SFG[kind](),preset:kind,seed:1+Math.floor(Math.random()*1e6),at:old?old.at:0,mute:old?old.mute:false})}
+function sfxMutate(p,amt){
+  const q={...p};for(const a of SFP){if(a[0]==='vol'||si(1))continue;q[a[0]]=Math.min(a[3],Math.max(a[2],p[a[0]]+(sr()-.5)*2*amt*.5*(a[3]-a[2])*.5))}
+  if(amt>.6&&si(3)===0)q.wave=si(3);q.seed=1+Math.floor(Math.random()*1e6);return sfxClean(q);
+}
 /* ----- state, favourites ----- */
-const fxs={p:null,em:[],sel:0,tok:0,sprites:[],locks:new Set(),editId:null,amount:0.3,sys:null,sprite:null,open:false,raf:0,last:0,idle:0,sprPicked:false,favs:[],cv:null};
-try{const a=JSON.parse(localStorage.getItem('lf-fxfavs'));if(Array.isArray(a))fxs.favs=a.filter(f=>f&&(f.em||f.p)).slice(0,24).map(f=>({name:String(f.name||'effect').slice(0,30),em:fxCleanFx(f.em?{emitters:f.em}:f.p).emitters}))}catch(_){}
+const fxs={p:null,em:[],sel:0,tok:0,sprites:[],locks:new Set(),editId:null,amount:0.3,sys:null,sprite:null,open:false,raf:0,last:0,idle:0,sprPicked:false,favs:[],cv:null,snd:[],ssel:0,sound:true,samount:.3,ac:null,stm:0};
+try{const a=JSON.parse(localStorage.getItem('lf-fxfavs'));if(Array.isArray(a))fxs.favs=a.filter(f=>f&&(f.em||f.p)).slice(0,24).map(f=>({name:String(f.name||'effect').slice(0,30),em:fxCleanFx(f.em?{emitters:f.em}:f.p).emitters,snd:Array.isArray(f.snd)?f.snd.slice(0,4).map(sfxClean):undefined}))}catch(_){}
 const fxSaveFavs=()=>{try{localStorage.setItem('lf-fxfavs',JSON.stringify(fxs.favs))}catch(_){toast('could not keep favourites in this browser','warn')}};
 const fxRand=(a,b)=>a+Math.random()*(b-a);
 const fxSetP=p=>{fxs.p=p;fxs.em[fxs.sel]=p};
@@ -2740,6 +2859,30 @@ function fxMutate(){
 }
 /* ----- the fx tab ----- */
 const FXP_=$('#fxp');
+function sndBuild(){
+  const rows=SFP.map(a=>`<div class="fxrow"><label>${a[1]}</label><input type="range" min="${a[2]}" max="${a[3]}" step="${a[4]}" data-sx="${a[0]}" aria-label="${a[1]}"><input type="number" class="fxn" data-sxn="${a[0]}" min="${a[2]}" max="${a[3]}" step="any" aria-label="${a[1]} (type a number)"></div>`).join('');
+  return `<div class="fxsec" id="snd"><div class="fxh">$ sound <span class="dim">· plays with the effect</span></div><div id="sndlist"></div>
+  <div class="fxbig"><select id="sndnew" aria-label="kind of sound to add">${Object.keys(SFG).map(k=>`<option value="${k}">${k}</option>`).join('')}</select><button class="sm" id="sndadd" title="add a random sound of this kind (up to 4 per effect)">＋ add sound</button><label class="ck" title="hear the sounds while you work in this tab"><input type="checkbox" id="sndon"> 🔊 on</label></div>
+  <div id="sndedit" hidden>
+    <div class="fxbig"><select id="sndtype" aria-label="kind of the highlighted sound">${Object.keys(SFG).map(k=>`<option value="${k}">${k}</option>`).join('')}</select><button class="btn-clay" id="sndroll" title="new random sound of this kind">🎲 roll</button></div>
+    <div class="fxbig"><button class="sm" id="sndmut" title="small changes to this sound">↻ mutate</button><input type="range" id="sndamt" min="0.05" max="1" step="0.05" value="0.3" aria-label="how much to change"><button class="sm" id="sndhear" title="play the whole effect again, with its sounds">▶ hear</button></div>
+    <div class="fxrow"><label>start at</label><input type="number" class="fxn" id="sndat" min="0" max="10" step="any" aria-label="seconds after the effect starts"><span class="dim">s after the effect starts</span></div>
+    <div class="fxrow"><label>wave</label><select id="sndwave" aria-label="wave">${SFWAVES.map((w,i)=>`<option value="${i}">${w}</option>`).join('')}</select></div>
+    <details id="sndmore"><summary class="dim">▾ tweak the sound (all the sliders)</summary>${rows}</details>
+  </div></div>`;
+}
+function sndDraw(){
+  const el=$('#sndlist');if(!el)return;
+  el.innerHTML=fxs.snd.length?fxs.snd.map((s,i)=>`<div class="fxem${i===fxs.ssel?' on':''}${s.mute?' off':''}"><button class="emn" data-snsel="${i}" title="edit this sound">${i+1} · ${esc(s.preset)} · ${SFWAVES[s.wave]} · ${s.at?'+'+s.at+'s':'at start'}</button><button class="sm" data-snmute="${i}" title="${s.mute?'switch this sound on':'switch this sound off'}" aria-label="mute sound">${s.mute?'○':'●'}</button><button class="sm" data-sndel="${i}" title="remove this sound" aria-label="remove sound">×</button></div>`).join(''):'<div class="dim" style="margin-bottom:8px">no sound yet · pick a kind and ＋ add sound, then 🎲 roll until it feels right</div>';
+  const s=fxs.snd[fxs.ssel],ed=$('#sndedit');ed.hidden=!s;$('#sndon').checked=fxs.sound;if(!s)return;
+  const A=document.activeElement;
+  $('#sndtype').value=s.preset;$('#sndwave').value=s.wave;if(A!==$('#sndat'))$('#sndat').value=s.at;
+  for(const a of SFP){const sl=$(`[data-sx="${a[0]}"]`,ed),nn=$(`[data-sxn="${a[0]}"]`,ed);if(sl&&sl!==A)sl.value=s[a[0]];if(nn&&nn!==A)nn.value=Math.round(s[a[0]]*1000)/1000}
+}
+function fxAudio(){try{if(!fxs.ac){const C=window.AudioContext||window.webkitAudioContext;if(C)fxs.ac=new C()}if(fxs.ac&&fxs.ac.state!=='running')fxs.ac.resume()}catch(_){}return fxs.ac}
+function fxSoundPlay(s){if(!fxs.ac)return;try{FXE.sfx.play(fxs.ac,s)}catch(e){console.warn(e)}}
+function fxEffectOf(){const e=new FXE.Effect({emitters:fxs.em,sounds:fxs.snd},fxs.sprites);e.onsound=s=>{if(fxs.sound)fxSoundPlay(s)};return e}
+const sndSoon=()=>{clearTimeout(fxs.stm);fxs.stm=setTimeout(()=>fxRestart(),220)};
 function fxBuild(){
   const rows=FXP.filter(a=>a[0]!=='delay').map(a=>`<div class="fxrow" data-row="${a[0]}"${a[6]?` data-only="${a[6]}"`:''}><label>${a[1]}</label><input type="range" min="${a[2]}" max="${a[3]}" step="${a[4]}" data-fx="${a[0]}" aria-label="${a[1]}"><input type="number" class="fxn" data-fxn="${a[0]}" min="${a[2]}" max="${a[3]}" step="any" aria-label="${a[1]} (type a number)" title="tap the number to type it"><span class="dim fxu">${a[5]}</span><button class="lk" data-lk="${a[0]}" title="lock: this stays as it is when you roll or mutate" aria-label="lock ${a[1]}">○</button></div>`).join('');
   $('#fxc').innerHTML=`<div class="fxsec"><div class="fxh">$ stack <span class="dim">· parts play together</span></div><div id="fxstack"></div><div class="fxbig"><select id="fxnewrec" aria-label="recipe for a new part">${Object.keys(FXR).map(k=>`<option value="${k}"${k==='fire'?' selected':''}>${k}</option>`).join('')}</select><button class="sm" id="fxaddem" title="add another part to this effect (up to 8)">＋ add part</button><button class="sm" id="fxrollall" title="roll every part (locks still hold)">🎲 all</button></div><div class="dim" id="fxedit"></div></div>
@@ -2752,6 +2895,7 @@ function fxBuild(){
     <div class="fxrow"><label>colour</label><span class="fxcols"><input type="color" id="fxc0" aria-label="start colour"><span class="dim">→</span><input type="color" id="fxc1" aria-label="end colour"></span><span class="dim" id="fxmulti"></span><button class="lk" data-lk="color" title="lock colours">○</button></div>
     <div class="fxrow"><label>blend</label><select id="fxblend" aria-label="blend"><option value="add">glow (add)</option><option value="normal">normal</option></select><label class="ck"><input type="checkbox" id="fxtint"> tint sprite</label><button class="lk" data-lk="blend" title="lock blend">○</button></div></div>
   <div class="fxsec"><div class="fxh">$ settings</div>${rows}<div class="fxrow"><label>random seed</label><span class="dim" id="fxseed"></span><span></span><button class="lk" data-lk="seed" title="lock the seed: the scatter stays the same when you roll">○</button></div></div>
+  ${sndBuild()}
   <div class="fxsec fxact"><button class="btn-clay" id="fxadd" title="put this effect on the canvas as a layer">＋ add to scene</button><button class="sm" id="fxupd" hidden title="change the effect layer you opened with edit">update layer</button><span class="dim" id="fxmsg"></span></div>`;
 }
 fxBuild();
@@ -2765,14 +2909,14 @@ function fxRefresh(){ // p changed: update the controls and restart the preview
   $$('[data-lk]',$('#fxc')).forEach(b=>{const on=fxs.locks.has(b.dataset.lk);b.textContent=on?'●':'○';b.classList.toggle('on',on)});
   $('#fxupd').hidden=!fxs.editId;$('#fxadd').textContent=fxs.editId?'＋ add as new layer':'＋ add to scene';
   $('#fxmsg').textContent=fxs.editId?'editing the effect layer you opened':'';
-  fxStackDraw();fxFavsDraw();fxLoadSprite();
+  fxStackDraw();fxFavsDraw();sndDraw();fxLoadSprite();
 }
 async function fxLoadSprite(){
   const em=fxs.em,tok=++fxs.tok;if(!em.length)return;
   const sp=await Promise.all(em.map(async e=>{try{return await fxSprite(e.spr)}catch(_){toast('could not read a picture, using the soft dot','warn');e.spr='builtin:soft';return fxSprite('builtin:soft')}}));
   if(tok!==fxs.tok)return;fxs.sprites=sp;fxRestart();
 }
-function fxRestart(){if(!fxs.em.length||fxs.sprites.length!==fxs.em.length)return;fxs.sys=new FXE.Effect({emitters:fxs.em},fxs.sprites);fxs.idle=0}
+function fxRestart(){if(!fxs.em.length||fxs.sprites.length!==fxs.em.length)return;fxs.sys=fxEffectOf();fxs.idle=0}
 function fxStackDraw(){
   const el=$('#fxstack');if(!el)return;
   el.innerHTML=fxs.em.map((e,i)=>(i?`<div class="fxwait"><label class="ck"><input type="checkbox" data-emwait="${i}"${e.delay>0?' checked':''} aria-label="wait before part ${i+1}"> wait</label>${e.delay>0?`<input type="number" class="fxn" data-emdelay="${i}" min="0" max="5" step="0.05" value="${Math.round(e.delay*1000)/1000}" aria-label="seconds to wait"><span class="dim">s after part ${i} starts</span>`:'<span class="dim">starts with part '+i+'</span>'}</div>`:'')+`<div class="fxem${i===fxs.sel?' on':''}${e.mute?' off':''}"><button class="emn" data-emsel="${i}" title="edit this part">${i+1} · ${esc(e.recipe)} · ${e.mode}${e.delay?` · +${Math.round(e.delay*100)/100}s`:''}</button><button class="sm" data-emmute="${i}" title="${e.mute?'switch this part on':'switch this part off'}" aria-label="mute part">${e.mute?'○':'●'}</button><button class="sm" data-emup="${i}" title="earlier in the list (drawn underneath)" aria-label="move up"${i?'':' disabled'}>▲</button><button class="sm" data-emdown="${i}" title="later in the list (drawn on top)" aria-label="move down"${i<fxs.em.length-1?'':' disabled'}>▼</button><button class="sm" data-emdel="${i}" title="remove this part" aria-label="remove part"${fxs.em.length>1?'':' disabled'}>×</button></div>`).join('');
@@ -2802,7 +2946,7 @@ function fxOpen(load){
   if(typeof cancelWand==='function'&&sess){cancelWand();setTool('move')}
   fxs.open=true;FXP_.classList.add('show');$('#tab-fx').classList.add('on');$('#tab-canvas').classList.remove('on');
   if(!fxs.cv)fxs.cv=$('#fxcv');
-  if(load){fxs.em=fxCleanFx(load).emitters;fxs.sel=0;fxs.p=fxs.em[0];fxs.sprPicked=true}
+  if(load){const c=fxCleanFx(load);fxs.em=c.emitters;fxs.snd=c.sounds;fxs.ssel=0;fxs.sel=0;fxs.p=fxs.em[0];fxs.sprPicked=true}
   if(!fxs.em.length){fxs.sprPicked=false;fxs.sel=0;fxSetP({...FXDEF});fxRoll('explosion')}else{fxs.p=fxs.em[fxs.sel]||fxs.em[0];fxRefresh()}
   cancelAnimationFrame(fxs.raf);fxs.last=0;fxs.raf=requestAnimationFrame(fxTick);
 }
@@ -2843,14 +2987,42 @@ $('#fxc').addEventListener('click',e=>{
   if(b.dataset.spr){const s=b.dataset.spr;if(s==='layer')fxSprFromLayer();else if(s==='upload')$('#fxfile').click();else fxPick('builtin:'+s);return}
   if(b.id==='fxroll'){fxRoll($('#fxrec').value);return}
   if(b.id==='fxmut'){fxMutate();return}
-  if(b.id==='fxfav'){const n=fxs.favs.filter(f=>f.name.startsWith(fxs.em.length>1?'stack':fxs.p.recipe)).length+1;fxs.favs.unshift({name:(fxs.em.length>1?'stack':fxs.p.recipe)+' '+n,em:fxCleanFx({emitters:fxs.em}).emitters});fxs.favs.length=Math.min(fxs.favs.length,24);fxSaveFavs();fxFavsDraw();toast('kept in favourites','good');return}
-  if(b.dataset.fav!=null){const f=fxs.favs[+b.dataset.fav];if(f){fxs.em=fxCleanFx({emitters:f.em}).emitters;fxs.sel=0;fxs.p=fxs.em[0];fxs.sprPicked=true;fxRefresh()}return}
+  if(b.id==='fxfav'){const n=fxs.favs.filter(f=>f.name.startsWith(fxs.em.length>1?'stack':fxs.p.recipe)).length+1;fxs.favs.unshift({name:(fxs.em.length>1?'stack':fxs.p.recipe)+' '+n,em:fxCleanFx({emitters:fxs.em}).emitters,snd:fxs.snd.map(sfxClean)});fxs.favs.length=Math.min(fxs.favs.length,24);fxSaveFavs();fxFavsDraw();toast('kept in favourites','good');return}
+  if(b.dataset.fav!=null){const f=fxs.favs[+b.dataset.fav];if(f){fxs.em=fxCleanFx({emitters:f.em}).emitters;if(f.snd){fxs.snd=f.snd.map(sfxClean);fxs.ssel=0}fxs.sel=0;fxs.p=fxs.em[0];fxs.sprPicked=true;fxRefresh()}return}
   if(b.dataset.favdel!=null){fxs.favs.splice(+b.dataset.favdel,1);fxSaveFavs();fxFavsDraw();return}
   if(b.id==='fxadd'){fxAddLayer();return}
   if(b.id==='fxupd'){fxUpdateLayer();return}
 });
+$('#fxc').addEventListener('input',e=>{
+  const t=e.target,s=fxs.snd[fxs.ssel];
+  if(t.dataset.sx&&s){s[t.dataset.sx]=+t.value;const nn=$(`[data-sxn="${t.dataset.sx}"]`,$('#fxc'));if(nn)nn.value=Math.round(+t.value*1000)/1000;sndSoon();return}
+  if(t.dataset.sxn&&s){const k=t.dataset.sxn,a=SFP.find(q=>q[0]===k),v=parseFloat(t.value);if(!isFinite(v))return;s[k]=Math.min(a[3],Math.max(a[2],v));const sl=$(`[data-sx="${k}"]`,$('#fxc'));if(sl)sl.value=s[k];sndSoon();return}
+  if(t.id==='sndat'&&s){const v=parseFloat(t.value);if(isFinite(v)){s.at=Math.min(10,Math.max(0,v));sndSoon()}return}
+  if(t.id==='sndamt')fxs.samount=+t.value;
+});
+$('#fxc').addEventListener('change',e=>{
+  const t=e.target,s=fxs.snd[fxs.ssel];
+  if(t.dataset.sxn&&s){t.value=Math.round(s[t.dataset.sxn]*1000)/1000;return}
+  if(t.id==='sndon'){fxs.sound=t.checked;if(t.checked)fxAudio();return}
+  if(!s)return;
+  if(t.id==='sndat'){s.at=Math.round(s.at*100)/100;sndDraw();return}
+  if(t.id==='sndwave'){s.wave=+t.value;sndDraw();sndSoon()}
+  else if(t.id==='sndtype'){fxs.snd[fxs.ssel]=sfxRoll(t.value,s);sndDraw();fxRestart()}
+});
+$('#fxc').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;fxAudio();
+  if(b.dataset.snsel!=null){fxs.ssel=+b.dataset.snsel;sndDraw();return}
+  if(b.dataset.snmute!=null){const s=fxs.snd[+b.dataset.snmute];if(s){s.mute=!s.mute;sndDraw();fxRestart()}return}
+  if(b.dataset.sndel!=null){fxs.snd.splice(+b.dataset.sndel,1);fxs.ssel=Math.max(0,Math.min(fxs.ssel,fxs.snd.length-1));sndDraw();return}
+  if(b.id==='sndadd'){if(fxs.snd.length>=4)return toast('4 sounds is the most for one effect','warn');fxs.snd.push(sfxRoll($('#sndnew').value));fxs.ssel=fxs.snd.length-1;fxs.sound=true;sndDraw();fxRestart();return}
+  const s=fxs.snd[fxs.ssel];if(!s)return;
+  if(b.id==='sndroll'){fxs.snd[fxs.ssel]=sfxRoll(s.preset,s);sndDraw();fxRestart()}
+  else if(b.id==='sndmut'){fxs.snd[fxs.ssel]=sfxMutate(s,fxs.samount);sndDraw();fxRestart()}
+  else if(b.id==='sndhear'){fxs.sound=true;sndDraw();fxRestart()}
+});
+for(const ev of ['pointerdown','click','touchend'])FXP_.addEventListener(ev,()=>{if(fxs.snd.length||fxs.ac)fxAudio()},true); // browsers only start sound after a tap
 $('#fx-replay').onclick=()=>fxRestart();
-$('#tab-fx').onclick=()=>{if(fxs.open)fxClose();else{fxs.editId=null;fxs.locks.clear();fxs.em=[];fxOpen()}};
+$('#tab-fx').onclick=()=>{if(fxs.open)fxClose();else{fxs.editId=null;fxs.locks.clear();fxs.em=[];fxs.snd=[];fxs.ssel=0;fxOpen()}};
 $('#tab-canvas').onclick=fxClose;
 $('#rail').addEventListener('click',()=>fxClose());
 for(const ev of ['pointerdown','pointermove','pointerup','wheel','keydown','keyup','dblclick','contextmenu'])FXP_.addEventListener(ev,e=>e.stopPropagation());
@@ -2858,7 +3030,7 @@ for(const ev of ['pointerdown','pointermove','pointerup','wheel','keydown','keyu
 async function fxAddLayer(){
   if(!fxs.em.length)return;setBusy(1);
   try{
-    const p=fxCleanFx({emitters:fxs.em}),{cv,W,H}=await fxPoster(p),blob=await toBlobAsync(cv),id=newId(),m=maskFrom(cv);p.bs=blob.size;
+    const p=fxCleanFx({emitters:fxs.em,sounds:fxs.snd}),{cv,W,H}=await fxPoster(p),blob=await toBlobAsync(cv),id=newId(),m=maskFrom(cv);p.bs=blob.size;
     store.set(id,{blob,pv:cv,mask:m.mask,mw:m.mw,mh:m.mh,w:W,h:H});
     const c=toScene({x:cw/2,y:ch/2}),cx=clamp(c.x,0,state.W),cy=clamp(c.y,0,state.H),nm=p.emitters.length>1?'stack':p.emitters[0].recipe,n=state.layers.filter(l=>l.fx&&l.name.startsWith('fx '+nm+' ')).length+1,i=state.layers.findIndex(l=>l.id===state.sel);
     fxClose();
@@ -2871,7 +3043,7 @@ async function fxUpdateLayer(){
   const id=fxs.editId,L=state.layers.find(l=>l.id===id),r=store.get(id);if(!L||!r)return toast('that effect layer is gone','warn');
   setBusy(1);
   try{
-    fxPlaying.delete(id);const meta=snapshot(),old=r.blob,p=fxCleanFx({emitters:fxs.em}),{cv,W,H}=await fxPoster(p),blob=await toBlobAsync(cv);p.bs=blob.size;
+    fxPlaying.delete(id);const meta=snapshot(),old=r.blob,p=fxCleanFx({emitters:fxs.em,sounds:fxs.snd}),{cv,W,H}=await fxPoster(p),blob=await toBlobAsync(cv);p.bs=blob.size;
     L.fx=p;shapePlace(L,W,H);r.pv=cv;r.w=W;r.h=H;Object.assign(r,maskFrom(cv));r.blob=blob;r.tc=null;tcache.clear();savedBlobs.delete(id);
     U.push({px:id,blob:old,meta});if(U.length>100)U.shift();R.length=0;lastStruct='';state.sel=id;fxClose();changed();toast('effect layer updated (ctrl+z undoes it)','good');
   }catch(err){console.error(err);toast('could not update: '+err.message,'err')}finally{setBusy(-1)}
@@ -2880,7 +3052,7 @@ var fxPlaying=new Map();
 async function fxPlay(id){
   const L=state.layers.find(l=>l.id===id);if(!L||!fxOk(L))return;
   if(fxPlaying.has(id)){fxPlaying.delete(id);fxPlayBtn();draw();return}
-  const sp=await fxSprites(L.fx.emitters);fxPlaying.set(id,{sys:new FXE.Effect(L.fx,sp),last:performance.now()});fxPlayBtn();draw();
+  const sp=await fxSprites(L.fx.emitters);const ef=new FXE.Effect(L.fx,sp);ef.onsound=fxSoundPlay;fxPlaying.set(id,{sys:ef,last:performance.now()});fxPlayBtn();draw();
 }
 function fxPlayBtn(){const L=sel(),b=$('[data-fxact="play"]',LP);if(b&&L)b.textContent=fxPlaying.has(L.id)?'■ stop':'▶ play'}
 function fxPaintLayer(L){ // called inside paint() with the layer's transform applied: origin of the effect = middle of the layer
@@ -2890,17 +3062,18 @@ function fxPaintLayer(L){ // called inside paint() with the layer's transform ap
 }
 function fxInspector(L){
   if(!L.fx||!fxOk(L))return '';const f=L.fx,em=f.emitters,loop=em.some(e=>!e.mute&&e.mode==='loop');
-  return `<div class="shbox"><div class="line"><label>effect</label><span class="dim" style="flex:1">${em.length>1?em.length+' parts: ':''}${esc(em.map(e=>e.recipe).join(' + '))}</span><button class="sm" data-fxact="play" title="${loop?'play it (it loops: press again to stop)':'play the effect once on the scene'}">${fxPlaying&&fxPlaying.has(L.id)?'■ stop':'▶ play'}</button><button class="sm" data-fxact="edit" title="open this effect in the fx tab to roll or change it">edit</button></div></div>`;
+  return `<div class="shbox"><div class="line"><label>effect</label><span class="dim" style="flex:1">${em.length>1?em.length+' parts: ':''}${esc(em.map(e=>e.recipe).join(' + '))}${f.sounds&&f.sounds.length?' · 🔊 '+f.sounds.length:''}</span><button class="sm" data-fxact="play" title="${loop?'play it (it loops: press again to stop)':'play the effect once on the scene'}">${fxPlaying&&fxPlaying.has(L.id)?'■ stop':'▶ play'}</button><button class="sm" data-fxact="edit" title="open this effect in the fx tab to roll or change it">edit</button></div></div>`;
 }
 LP.addEventListener('click',e=>{
   const b=e.target.closest('[data-fxact]');if(!b)return;const L=sel();if(!L||!fxOk(L))return;
-  if(b.dataset.fxact==='play')fxPlay(L.id);
+  if(b.dataset.fxact==='play'){fxAudio();fxPlay(L.id)}
   else{fxs.editId=L.id;fxs.locks.clear();fxOpen(L.fx)}
 });
 /* ----- saving: scene.json carries the effect, the zip carries the sprite, and the game gets fx.json + particles.js + a README ----- */
 const fxSprFile=(spr,tag)=>spr.startsWith('builtin:')?'fx-sprites/'+spr.slice(8)+'.png':'fx-sprites/'+tag+'.png';
 const fxEmPublic=(e,tag)=>{const {spr,...o}=e;return {...o,sprite:fxSprFile(spr,tag),...(spr.startsWith('builtin:')?{builtin:spr.slice(8)}:{})}};
-function fxPublic(l,i){return {effect:l.name,emitters:l.fx.emitters.map((e,k)=>fxEmPublic(e,slug(l.name)+'-'+i+'-'+k))}}
+const fxSndFile=tag=>'fx-sounds/'+tag+'.wav';
+function fxPublic(l,i){return {effect:l.name,emitters:l.fx.emitters.map((e,k)=>fxEmPublic(e,slug(l.name)+'-'+i+'-'+k)),sounds:(l.fx.sounds||[]).map((s,k)=>({...s,file:fxSndFile(slug(l.name)+'-'+i+'-'+k)}))}}
 async function fxSpriteBytes(spr){const c=await fxSprite(spr),b=await toBlobAsync(c);return new Uint8Array(await b.arrayBuffer())}
 const fxToDataURL=u8=>new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(new Blob([u8],{type:'image/png'}))});
 async function fxLoad(o,files,bs){
@@ -2911,23 +3084,23 @@ async function fxLoad(o,files,bs){
     else if(e.sprite){const base=String(e.sprite).replace(/^.*\//,''),fk=[...files.keys()].find(k=>k.replace(/^.*\//,'')===base);if(fk)spr=await fxToDataURL(files.get(fk))}
     out.push({...e,spr});
   }
-  return fxCleanFx({emitters:out},bs);
+  return fxCleanFx({emitters:out,sounds:o.sounds},bs);
 }
 function fxNormLayer(l){return l.fx?{...l,fx:fxCleanFx(l.fx.emitters?l.fx:{emitters:[l.fx]},l.fx.bs)}:l} // old saves (one flat effect) become a stack of one
 async function fxExportEntries(list){ // extra zip entries for the game; [] when the scene has no effects
   const fl=list.map((l,i)=>[l,i]).filter(([l])=>l.fx&&fxOk(l)),out=[],seen=new Set();
   if(!fl.length&&!fxs.favs.length)return out;
   const effects={},enc=new TextEncoder();
-  for(const [l,i] of fl){const pub=fxPublic(l,i);effects[l.name]={emitters:pub.emitters};for(let k=0;k<pub.emitters.length;k++){const f=pub.emitters[k].sprite;if(!seen.has(f)){seen.add(f);out.push({name:f,data:await fxSpriteBytes(l.fx.emitters[k].spr)})}}}
-  fxs.favs.forEach((fv,j)=>{const nm='fav '+fv.name,em=fv.em.map((e,k)=>fxEmPublic(e,'fav-'+j+'-'+k));effects[nm]={emitters:em};em.forEach((pe,k)=>{if(!seen.has(pe.sprite)){seen.add(pe.sprite);out.push({sp:fv.em[k].spr,name:pe.sprite})}})});
+  for(const [l,i] of fl){const pub=fxPublic(l,i);effects[l.name]={emitters:pub.emitters,...(pub.sounds.length?{sounds:pub.sounds}:{})};for(const sn of pub.sounds)out.push({name:sn.file,data:FXE.sfx.wav(sn)});for(let k=0;k<pub.emitters.length;k++){const f=pub.emitters[k].sprite;if(!seen.has(f)){seen.add(f);out.push({name:f,data:await fxSpriteBytes(l.fx.emitters[k].spr)})}}}
+  fxs.favs.forEach((fv,j)=>{const nm='fav '+fv.name,em=fv.em.map((e,k)=>fxEmPublic(e,'fav-'+j+'-'+k));const sn=(fv.snd||[]).map((s,k)=>({...s,file:fxSndFile('fav-'+j+'-'+k)}));effects[nm]={emitters:em,...(sn.length?{sounds:sn}:{})};for(const q of sn)out.push({name:q.file,data:FXE.sfx.wav(q)});em.forEach((pe,k)=>{if(!seen.has(pe.sprite)){seen.add(pe.sprite);out.push({sp:fv.em[k].spr,name:pe.sprite})}})});
   for(const e of out)if(e.sp){e.data=await fxSpriteBytes(e.sp);delete e.sp}
   out.push({name:'fx.json',data:enc.encode(JSON.stringify({format:'layerforge-fx',version:1,note:'one entry per effect; see FX-README.md',effects},null,2))});
   out.push({name:'particles.js',data:enc.encode(FX_RUNTIME())});
   out.push({name:'FX-README.md',data:enc.encode(FX_README)});
   return out;
 }
-const FX_RUNTIME=()=>`/* Layerforge FX runtime (particles). Browser canvas 2D, no dependencies. See FX-README.md.\n   Usage: new LayerforgeFX.System(effect, spriteImage, seed) ; sys.update(dtSeconds) ; sys.draw(ctx, x, y, scale, opacity) ; sys.done */\n(function(root){\nvar LayerforgeFX=(${lfFxEngine.toString()})();\nif(typeof module!=='undefined'&&module.exports)module.exports=LayerforgeFX;else root.LayerforgeFX=LayerforgeFX;\n})(typeof window!=='undefined'?window:this);\n`;
-const FX_README=`# Layerforge FX: particle effects for the game
+const FX_RUNTIME=()=>`/* Layerforge FX runtime (particles). Browser canvas 2D, no dependencies. See FX-README.md.\n   Usage: LayerforgeFX.load(effect) ; fx.update(dtSeconds) ; fx.draw(ctx, x, y, scale, opacity) ; fx.done. Sounds: LayerforgeFX.setAudio(audioContext) */\n(function(root){\nvar LayerforgeFX=(${lfFxEngine.toString()})();\nif(typeof module!=='undefined'&&module.exports)module.exports=LayerforgeFX;else root.LayerforgeFX=LayerforgeFX;\n})(typeof window!=='undefined'?window:this);\n`;
+const FX_README=`# Layerforge FX: particle effects and sounds for the game
 
 This folder was exported from Layerforge. Effects are made in the app (roll / lock / mutate until they feel right) and saved as plain settings, so the game replays them with a small runtime.
 
@@ -2936,6 +3109,7 @@ An effect is a STACK of one or more parts ("emitters") that play together, e.g. 
 ## Files
 - \`fx.json\`: every effect, by name: \`{ "format":"layerforge-fx", "effects": { "<name>": { "emitters":[ { ...settings, "sprite":"fx-sprites/x.png" }, ... ] } } }\`. Effects named \`fav ...\` are the app's saved favourites (not placed in the scene).
 - \`fx-sprites/*.png\`: the particle pictures (white soft shapes, tinted by the runtime from \`color0\` to \`color1\`).
+- \`fx-sounds/*.wav\`: a ready-made WAV for every sound (mono, 44100 Hz).
 - \`particles.js\`: the runtime. Plain script, sets \`LayerforgeFX\` (also usable with \`require\`). Needs a browser (it makes canvases).
 - \`scene.json\`: a layer with an \`fx\` block is an effect placed in the scene (same \`emitters\` list). The emitter origin is the CENTRE of that layer's rectangle: x + w/2, y + h/2 (default pivot), and the layer's \`scale\`, \`rotation\` and \`opacity\` apply (scale the drawing, rotate around the origin). Its PNG is only a still preview: do not draw it in the game, play the effect instead.
 
@@ -2950,6 +3124,12 @@ if (boom.done) { /* every part has finished: remove it */ }   // looping parts n
 \`\`\`
 To play the same effect again, call \`boom.reset()\` (or load it again). For a different scatter each time, pass a seed: \`new LayerforgeFX.Effect(effect, spriteImages, seed)\` (spriteImages = one loaded Image per emitter, in order). A single part can also be played alone with \`new LayerforgeFX.System(emitter, image, seed)\` (same update / draw / done).
 
+## Sounds
+An effect can also carry SOUNDS: \`"sounds":[ {...} ]\` next to \`emitters\` (same in scene.json). Each is a small synth recipe (sfxr-style: wave, pitch, slide, envelope, filters...), plus \`at\` = seconds after the effect starts, \`mute\` and \`file\` = its WAV in \`fx-sounds/\`. Two ways to play them:
+1. Easiest: hand the runtime your AudioContext once and every effect plays its own sounds at the right moment, no files needed: \`LayerforgeFX.setAudio(audioCtx)\`. Create or resume the AudioContext inside a click / key press (browsers insist on that).
+2. Or do it yourself: \`boom.onsound = (snd, index) => { /* play snd.file with your own audio code */ }\`.
+\`LayerforgeFX.sfx.wav(snd)\` renders a sound to WAV bytes and \`LayerforgeFX.sfx.render(snd)\` to a Float32Array. \`boom.done\` waits for sounds that have not started yet.
+
 ## Settings (in each emitter)
 - \`mode\`: "burst" (emits \`count\` particles over \`burstTime\` seconds, then ends) or "loop" (emits \`rate\` per second forever); \`delay\` seconds AFTER THE PART ABOVE IT STARTED (0 = starts together with it; the first part counts from the start of the effect); \`mute\` true = skipped
 - \`lifeMin/lifeMax\` seconds; \`speedMin/speedMax\` pixels per second; \`angle\` degrees (0 = right, -90 = up, 90 = down) and \`spread\` degrees around it (360 = every direction); \`gravity\` pixels/second² (positive = down); \`drag\` per second
@@ -2957,7 +3137,7 @@ To play the same effect again, call \`boom.reset()\` (or load it again). For a d
 - \`color0\` to \`color1\` colour over life (\`tint\` false = use the sprite's own colours); \`multi\` = a list of colours, each particle picks one; \`blend\` "add" (glow, drawn with lighter) or "normal"
 - \`seed\`: random scatter. Pixels are scene pixels (the scene is usually 3840 x 2160); scale them with your draw scale.
 `;
-window.__lf={fxs,fxRoll,fxMutate,fxOpen,fxClose,fxAddLayer,fxUpdateLayer,fxPlay,fxPlaying,fxOk,fxPoster,FXE,FXR,fxClean,fxExportEntries,fxLoad,shapeCreate,shapeLive,shapeCommit,shapeOk,renderShape,get sdrag(){return sdrag},cornersFlat,autoWandLayer,autoBgSel,planParse,openPlan,finishPlans,cropRef,syncChildren,tcache,finishPick,startPick,detachLayer,get pickPar(){return pickPar},dupLayer,makeVariants,feelPreview,feelApply,feelCancel,get fs(){return fs},get gb(){return gb},set gb(v){gb=v;gbBtn();draw()},gbToggle,gbHit,gbPts,enqueueUpscale,flattenScene,mergeLayers,selIds,msel,rdCut,get rd(){return rd},rdPaint,enqueueRedraw,getRefs,composePrompt,setRef,getRefs,cutRegion,get cs(){return cs},applyCut,state,store,view,brush,applyWand,cfg,jobs,enqueue,setTool,addBlank,importFiles,saveZip,zipBuild,zipRead,edit,undo,redo,fit}; // handy for debugging
+window.__lf={sfxRoll,sfxMutate,sfxClean,fxAudio,fxs,fxRoll,fxMutate,fxOpen,fxClose,fxAddLayer,fxUpdateLayer,fxPlay,fxPlaying,fxOk,fxPoster,FXE,FXR,fxClean,fxExportEntries,fxLoad,shapeCreate,shapeLive,shapeCommit,shapeOk,renderShape,get sdrag(){return sdrag},cornersFlat,autoWandLayer,autoBgSel,planParse,openPlan,finishPlans,cropRef,syncChildren,tcache,finishPick,startPick,detachLayer,get pickPar(){return pickPar},dupLayer,makeVariants,feelPreview,feelApply,feelCancel,get fs(){return fs},get gb(){return gb},set gb(v){gb=v;gbBtn();draw()},gbToggle,gbHit,gbPts,enqueueUpscale,flattenScene,mergeLayers,selIds,msel,rdCut,get rd(){return rd},rdPaint,enqueueRedraw,getRefs,composePrompt,setRef,getRefs,cutRegion,get cs(){return cs},applyCut,state,store,view,brush,applyWand,cfg,jobs,enqueue,setTool,addBlank,importFiles,saveZip,zipBuild,zipRead,edit,undo,redo,fit}; // handy for debugging
 (async()=>{
   $('#sname').value=state.name;$('#sname').style.width='10ch';
   if(innerWidth<1000)document.body.classList.add('noside');
