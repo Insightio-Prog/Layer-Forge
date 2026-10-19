@@ -80,6 +80,9 @@ body.noside #side{display:none}
 .fxbig .ck{display:flex;gap:6px;align-items:center;white-space:nowrap;color:var(--text)}#snd summary{cursor:pointer;min-height:36px;display:flex;align-items:center;margin:4px 0}
 #fxp{position:absolute;inset:0;display:none;background:var(--bg);z-index:30;grid-template-columns:minmax(0,1fr) 370px;min-height:0}
 #fxp.show{display:grid}
+#anp{position:absolute;top:0;right:0;bottom:0;width:370px;max-width:100%;display:none;background:var(--bg);border-left:1px solid var(--line);z-index:29;overflow:auto;padding:10px 14px 24px;min-height:0}
+#anp.show{display:block}.anname{width:auto!important;flex:1;text-align:left!important}.anpn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:900px){#anp{top:auto;left:0;width:auto;height:48%;border-left:0;border-top:1px solid var(--line)}}
 #fxv{position:relative;min-width:0;min-height:0;border-right:1px solid var(--line)}
 #fxcv{position:absolute;inset:0;width:100%;height:100%;display:block}
 #fxvb{position:absolute;left:12px;top:12px;display:flex;gap:12px;align-items:center}
@@ -240,6 +243,7 @@ select option:checked,select option:hover{background:#3a2a22;color:#e9a98f}
       <button class="tab on" id="tab-canvas">canvas</button>
       <button class="tab" disabled title="reference images arrive in a later step">refs</button>
       <button class="tab" id="tab-fx" title="particle effects: roll until it feels right, then put it on the canvas">fx</button>
+      <button class="tab" id="tab-anim" title="animate layers: bob, sway, walk cycles for parts of a character">anim</button>
       <button class="tab" id="tab-export">export</button>
     </nav>
     <div class="spacer"></div>
@@ -267,6 +271,7 @@ select option:checked,select option:hover{background:#3a2a22;color:#e9a98f}
   <main id="stage">
     <canvas id="cv"></canvas>
     <div id="fxp"><div id="fxv"><canvas id="fxcv"></canvas><div id="fxvb"><button class="sm" id="fx-replay" title="play it again from the start">▶ replay</button><span class="dim">the cross is where the effect starts</span></div></div><div id="fxc"></div></div>
+    <div id="anp" aria-label="animation"></div>
     <div id="sbar"><span class="tb-t">shape</span>
       <span class="stypes" id="stypes"><button class="sm on" data-st="circle" title="circle / oval">●</button><button class="sm" data-st="square" title="square / rectangle">■</button><button class="sm" data-st="hexagon" title="hexagon">⬢</button><button class="sm" data-st="star" title="star">★</button></span>
       <label class="tb-l">fill<input type="color" id="scol" value="#D97757" aria-label="shape colour"></label>
@@ -522,10 +527,11 @@ function paint(){
   ctx.save();ctx.translate(view.x,view.y);ctx.scale(view.z,view.z);
   ctx.beginPath();ctx.rect(0,0,state.W,state.H);ctx.clip();
   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  const AF=ans&&ans.open?animFrameNow():null; // a clip is playing: every layer is drawn at its animated pose
   for(const L of state.layers){
     if(!L.vis)continue;const r=store.get(L.id);if(!r)continue;
     ctx.save();
-    try{ctx.globalAlpha=L.op;applyM(ctx,L);if(!r.pv||!r.pv.width||!r.pv.height)throw new Error('empty picture');if(fxPlaying&&fxPlaying.size&&fxPlaying.has(L.id))fxPaintLayer(L);else ctx.drawImage(tintedSurface(L,r,r.pv),0,0,L.w,L.h)}
+    try{const af=AF&&AF.get(L.id);if(af){ctx.globalAlpha=Math.max(0,Math.min(1,af.op));ctx.transform(af.m[0],af.m[1],af.m[2],af.m[3],af.m[4],af.m[5])}else{ctx.globalAlpha=L.op;applyM(ctx,L)}if(!r.pv||!r.pv.width||!r.pv.height)throw new Error('empty picture');if(fxPlaying&&fxPlaying.size&&fxPlaying.has(L.id))fxPaintLayer(L);else ctx.drawImage(tintedSurface(L,r,r.pv),0,0,L.w,L.h)}
     catch(err){drawProblem(L,err)}
     finally{ctx.restore()}
   }
@@ -540,7 +546,7 @@ function paint(){
     ctx.fillText('✻ painting layer: '+run.name+'…',view.x+sw/2,view.y+sh/2);ctx.restore();requestAnimationFrame(draw);
   }
   const L=sel();
-  if(L&&state.tool==='move'&&L.vis){
+  if(L&&state.tool==='move'&&L.vis&&!AF){
     const h=handlesFor(L);
     ctx.strokeStyle='#D97757';ctx.lineWidth=1.5;ctx.setLineDash(L.lock?[5,4]:[]);
     ctx.beginPath();h.c.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.stroke();ctx.setLineDash([]);
@@ -565,6 +571,7 @@ function paint(){
     ctx.strokeStyle='rgba(20,20,19,.85)';ctx.beginPath();ctx.arc(hover.x,hover.y,rr+1,0,7);ctx.stroke();
     ctx.strokeStyle='#E8E6DC';ctx.beginPath();ctx.arc(hover.x,hover.y,rr,0,7);ctx.stroke();
   }
+  if(AF)draw();
 }
 
 /* ---------- history ---------- */
@@ -2279,9 +2286,9 @@ const fileFor=(l,i)=>String(i+1).padStart(2,'0')+'-'+slug(l.name)+'.png';
 function parentInfo(l,list){const j=l.par?list.findIndex(q=>q.id===l.par):-1;return j<0?{}:{parent:fileFor(list[j],j),parentName:list[j].name}}
 function sceneJSON(list=state.layers,skipped){
   return {format:'layerforge-scene',version:1,name:state.name,width:state.W,height:state.H,
-    notes:'layers are listed bottom to top (z = stacking order). parent (optional) = the file of the layer this one is attached to (eyes and mouth on an enemy, say): when the parent moves, scales or turns, this layer should follow it; the x / y / scale / rotation given here are its resting pose. tint (optional) recolours a layer in code: mode multiply = canvas multiply blend of color over the picture (keeps shading and outlines), mode color = canvas color blend (keeps brightness, swaps hue); amount 0-1 mixes the tinted picture over the original. x,y = top-left of the unscaled layer in scene pixels. scale (1 = 100%) and rotation (degrees, clockwise) turn the layer around pivot (0-1 across the layer, can fall outside it).',
+    notes:'layers are listed bottom to top (z = stacking order). parent (optional) = the file of the layer this one is attached to (eyes and mouth on an enemy, say): when the parent moves, scales or turns, this layer should follow it; the x / y / scale / rotation given here are its resting pose. tint (optional) recolours a layer in code: mode multiply = canvas multiply blend of color over the picture (keeps shading and outlines), mode color = canvas color blend (keeps brightness, swaps hue); amount 0-1 mixes the tinted picture over the original. x,y = top-left of the unscaled layer in scene pixels. scale (1 = 100%) and rotation (degrees, clockwise) turn the layer around pivot (0-1 across the layer, can fall outside it). anim (optional) = motions per named clip, role = the part of a puppet character: see ANIM-README.md.',
     ...(skipped?{skipped}:{}),
-    layers:list.map((l,i)=>({...parentInfo(l,list),name:l.name,file:fileFor(l,i),z:i,x:l.x,y:l.y,w:l.w,h:l.h,scale:l.scale,rotation:l.rot,pivot:{x:l.px,y:l.py},opacity:l.op,visible:l.vis,locked:l.lock,ai:l.ai,...(l.tint?{tint:{color:l.tint,mode:l.tm||'multiply',amount:l.ta==null?1:l.ta}}:{}),...(l.shape&&shapeOk(l)?{shape:shapePublic(l.shape)}:{}),...(l.fx&&fxOk(l)?{fx:fxPublic(l,i)}:{})}))};
+    layers:list.map((l,i)=>({...parentInfo(l,list),name:l.name,file:fileFor(l,i),z:i,x:l.x,y:l.y,w:l.w,h:l.h,scale:l.scale,rotation:l.rot,pivot:{x:l.px,y:l.py},opacity:l.op,visible:l.vis,locked:l.lock,ai:l.ai,...(l.tint?{tint:{color:l.tint,mode:l.tm||'multiply',amount:l.ta==null?1:l.ta}}:{}),...(l.shape&&shapeOk(l)?{shape:shapePublic(l.shape)}:{}),...(l.fx&&fxOk(l)?{fx:fxPublic(l,i)}:{}),...(l.role?{role:l.role}:{}),...(l.anim?{anim:l.anim}:{})}))};
 }
 const TOUCH=('ontouchstart' in window)&&navigator.maxTouchPoints>1;
 let zipNm='';try{zipNm=localStorage.getItem('lf-zipnm')||''}catch(_){}
@@ -2301,6 +2308,7 @@ async function saveZip(game){
     const enc=new TextEncoder(),entries=[{name:'scene.json',data:enc.encode(JSON.stringify(sceneJSON(list,skipped&&skipped.length?skipped:undefined),null,2))}];
     for(let i=0;i<list.length;i++){const l=list[i];entries.push({name:fileFor(l,i),data:new Uint8Array(await store.get(l.id).blob.arrayBuffer())})}
     for(const e of await fxExportEntries(list))entries.push(e);
+    for(const e of animExportEntries(list))entries.push(e);
     const fname=(!game&&zipNm)||slug(state.name)+(game?'-game':'')+'.zip',z=zipBuild(entries);
     let how='saved';
     if(!game&&TOUCH&&navigator.canShare&&navigator.share){
@@ -2330,7 +2338,7 @@ async function openZip(file){
         const fk=[...files.keys()].find(k=>k.replace(/^.*\//,'')===String(m.file||'').replace(/^.*\//,''));
         if(!fk){toast('missing file for layer '+m.name,'warn');continue}
         const r=await makeRec(mk(files.get(fk)),{trim:false});if(!r)continue;const id=newId();store.set(id,r.rec);
-        state.layers.push({id,name:m.name||niceName(fk),x:+m.x||0,y:+m.y||0,w:r.rec.w,h:r.rec.h,scale:m.scale??1,rot:m.rotation??0,px:m.pivot?.x??.5,py:m.pivot?.y??.5,op:m.opacity??1,vis:m.visible!==false,lock:!!m.locked,ai:!!m.ai,...(m.tint&&m.tint.color?{tint:String(m.tint.color),tm:m.tint.mode==='color'?'color':'multiply',ta:m.tint.amount==null?1:+m.tint.amount}:{}),...(m.shape&&m.shape.type?{shape:shapeClean(m.shape,r.rec.blob.size)}:{}),...(m.fx&&typeof m.fx==='object'?{fx:await fxLoad(m.fx,files,r.rec.blob.size)}:{})});
+        state.layers.push({id,name:m.name||niceName(fk),x:+m.x||0,y:+m.y||0,w:r.rec.w,h:r.rec.h,scale:m.scale??1,rot:m.rotation??0,px:m.pivot?.x??.5,py:m.pivot?.y??.5,op:m.opacity??1,vis:m.visible!==false,lock:!!m.locked,ai:!!m.ai,...(m.tint&&m.tint.color?{tint:String(m.tint.color),tm:m.tint.mode==='color'?'color':'multiply',ta:m.tint.amount==null?1:+m.tint.amount}:{}),...(m.shape&&m.shape.type?{shape:shapeClean(m.shape,r.rec.blob.size)}:{}),...(m.fx&&typeof m.fx==='object'?{fx:await fxLoad(m.fx,files,r.rec.blob.size)}:{}),...(m.anim?(()=>{const a=animCleanAll(m.anim);return a?{anim:a}:{}})():{}),...(m.role&&ANROLES.some(q=>q[0]===m.role)?{role:m.role}:{})});
         byFile.set(String(m.file||'').replace(/^.*\//,''),id);if(m.parent)wantPar.push([id,String(m.parent).replace(/^.*\//,'')]);
       }
       for(const [cid,pf] of wantPar){const pid=byFile.get(pf);const C=state.layers.find(l=>l.id===cid);if(C&&pid&&pid!==cid)C.par=pid}
@@ -2450,8 +2458,8 @@ async function loadAuto(){
 }
 
 /* ---------- glue ---------- */
-function changed(){syncChildren();if(sess&&state.sel!==sess.id){cancelWand();setTool('move')}if(cs&&state.sel!==cs.id)cancelCut();draw();renderLayers();statusBar();saveSoon();$('#b-undo').disabled=!U.length;$('#b-redo').disabled=!R.length}
-function changedFast(){syncChildren();draw();syncInspector();statusBar();saveSoon()}
+function changed(){syncChildren();if(ans&&ans.open)anRefresh();if(sess&&state.sel!==sess.id){cancelWand();setTool('move')}if(cs&&state.sel!==cs.id)cancelCut();draw();renderLayers();statusBar();saveSoon();$('#b-undo').disabled=!U.length;$('#b-redo').disabled=!R.length}
+function changedFast(){syncChildren();if(ans&&ans.open)anRefresh();draw();syncInspector();statusBar();saveSoon()}
 addEventListener('beforeunload',()=>{});
 new ResizeObserver(resize).observe(stage);
 
@@ -2943,6 +2951,7 @@ function fxTick(now){
   x.fillStyle='#7a7870';x.font='11px ui-monospace,Consolas,monospace';x.textAlign='left';x.fillText(fxs.sys.count+' particles · view '+Math.round(s*100)+'%',10,H-10);
 }
 function fxOpen(load){
+  if(ans&&ans.open)animClose();
   if(typeof cancelWand==='function'&&sess){cancelWand();setTool('move')}
   fxs.open=true;FXP_.classList.add('show');$('#tab-fx').classList.add('on');$('#tab-canvas').classList.remove('on');
   if(!fxs.cv)fxs.cv=$('#fxcv');
@@ -3023,7 +3032,7 @@ $('#fxc').addEventListener('click',e=>{
 for(const ev of ['pointerdown','click','touchend'])FXP_.addEventListener(ev,()=>{if(fxs.snd.length||fxs.ac)fxAudio()},true); // browsers only start sound after a tap
 $('#fx-replay').onclick=()=>fxRestart();
 $('#tab-fx').onclick=()=>{if(fxs.open)fxClose();else{fxs.editId=null;fxs.locks.clear();fxs.em=[];fxs.snd=[];fxs.ssel=0;fxOpen()}};
-$('#tab-canvas').onclick=fxClose;
+$('#tab-canvas').onclick=()=>{fxClose();animClose()};
 $('#rail').addEventListener('click',()=>fxClose());
 for(const ev of ['pointerdown','pointermove','pointerup','wheel','keydown','keyup','dblclick','contextmenu'])FXP_.addEventListener(ev,e=>e.stopPropagation());
 /* ----- effect layers on the canvas ----- */
@@ -3137,7 +3146,353 @@ An effect can also carry SOUNDS: \`"sounds":[ {...} ]\` next to \`emitters\` (sa
 - \`color0\` to \`color1\` colour over life (\`tint\` false = use the sprite's own colours); \`multi\` = a list of colours, each particle picks one; \`blend\` "add" (glow, drawn with lighter) or "normal"
 - \`seed\`: random scatter. Pixels are scene pixels (the scene is usually 3840 x 2160); scale them with your draw scale.
 `;
-window.__lf={sfxRoll,sfxMutate,sfxClean,fxAudio,fxs,fxRoll,fxMutate,fxOpen,fxClose,fxAddLayer,fxUpdateLayer,fxPlay,fxPlaying,fxOk,fxPoster,FXE,FXR,fxClean,fxExportEntries,fxLoad,shapeCreate,shapeLive,shapeCommit,shapeOk,renderShape,get sdrag(){return sdrag},cornersFlat,autoWandLayer,autoBgSel,planParse,openPlan,finishPlans,cropRef,syncChildren,tcache,finishPick,startPick,detachLayer,get pickPar(){return pickPar},dupLayer,makeVariants,feelPreview,feelApply,feelCancel,get fs(){return fs},get gb(){return gb},set gb(v){gb=v;gbBtn();draw()},gbToggle,gbHit,gbPts,enqueueUpscale,flattenScene,mergeLayers,selIds,msel,rdCut,get rd(){return rd},rdPaint,enqueueRedraw,getRefs,composePrompt,setRef,getRefs,cutRegion,get cs(){return cs},applyCut,state,store,view,brush,applyWand,cfg,jobs,enqueue,setTool,addBlank,importFiles,saveZip,zipBuild,zipRead,edit,undo,redo,fit}; // handy for debugging
+/* ---------- anim: motions on layers (level 1) and puppet rigs (level 2) ---------- */
+function lfAnimEngine(){
+  function hsh(n){var s=Math.sin(n*127.1+311.7)*43758.5453;return(s-Math.floor(s))*2-1}
+  function noise(x,seed){var i=Math.floor(x),f=x-i,o=(seed||0)*131.3;f=f*f*(3-2*f);return hsh(i+o)*(1-f)+hsh(i+1+o)*f}
+  function frac(x){return x-Math.floor(x)}
+  function ease(k,u){
+    switch(k){
+      case 'linear':return u;
+      case 'in':return u*u*u;
+      case 'inout':return u<.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2;
+      case 'back':{var c=1.70158;return 1+(c+1)*Math.pow(u-1,3)+c*Math.pow(u-1,2)}
+      case 'bounce':{var n=7.5625,d=2.75;if(u<1/d)return n*u*u;if(u<2/d){u-=1.5/d;return n*u*u+.75}if(u<2.5/d){u-=2.25/d;return n*u*u+.9375}u-=2.625/d;return n*u*u+.984375}
+      default:return 1-Math.pow(1-u,3);
+    }
+  }
+  var ONCE={fadein:1,fadeout:1,slidein:1,popin:1,dropin:1};
+  // one motion at time t (seconds) adds its effect to o = {dx,dy (fractions of the layer's width / height), rot (degrees), sx, sy (scale), op}
+  function motion(m,t,o){
+    if(m.mute)return;
+    var a=m.a==null?0:m.a,f=m.f==null?1:m.f,ph=m.ph||0,b=m.b||0,tt=t-(m.dl||0),k=m.k,s,u,c,sq;
+    if(ONCE[k]){
+      var dur=Math.max(.05,m.dur==null?.5:m.dur);u=tt<=0?0:tt>=dur?1:tt/dur;var e=ease(m.e,u);
+      if(k==='fadein')o.op*=Math.max(0,Math.min(1,e));
+      else if(k==='fadeout')o.op*=Math.max(0,Math.min(1,1-e));
+      else if(k==='slidein'){var v=(1-e)*a/100,d=m.d||'left';if(d==='left')o.dx-=v;else if(d==='right')o.dx+=v;else if(d==='top')o.dy-=v;else o.dy+=v}
+      else if(k==='popin'){o.sx*=e;o.sy*=e}
+      else if(k==='dropin')o.dy-=(1-e)*a/100;
+      return;
+    }
+    if(tt<0)return;
+    s=Math.sin(6.283185307*(f*tt+ph));
+    if(k==='bob')o.dy+=(b-a*s)/100;
+    else if(k==='sway')o.dx+=(b+a*s)/100;
+    else if(k==='tilt')o.rot+=b+a*s;
+    else if(k==='breathe'){c=a/100*s;o.sy*=1+c;o.sx*=1-c*.5}
+    else if(k==='pulse'){c=a/100*s;o.sx*=1+c;o.sy*=1+c}
+    else if(k==='bounce'){u=Math.abs(Math.sin(3.14159265*(f*tt+ph)));o.dy-=a/100*u;sq=.2*Math.pow(1-u,6);o.sy*=1-sq;o.sx*=1+sq*.6}
+    else if(k==='hop'){c=frac(f*tt+ph);if(c<.5){u=c*2;o.dy-=a/100*4*u*(1-u)}var dd=Math.min(Math.abs(c-.5),Math.min(c,1-c));sq=.22*Math.max(0,1-dd/.1);o.sy*=1-sq;o.sx*=1+sq*.7}
+    else if(k==='spin')o.rot+=(f*tt+ph)*360;
+    else if(k==='orbit'){o.dx+=a/100*Math.cos(6.283185307*(f*tt+ph));o.dy+=a/100*Math.sin(6.283185307*(f*tt+ph))}
+    else if(k==='shake'){o.dx+=a/100*noise(tt*f*6,1);o.dy+=a/100*noise(tt*f*6,2);o.rot+=a*.2*noise(tt*f*6,3)}
+    else if(k==='wiggle')o.rot+=a*noise(tt*f*3+ph*10,4);
+    else if(k==='flicker')o.op*=1-a/100*(noise(tt*f*8,5)*.5+.5);
+  }
+  function mul(A,B){return[A[0]*B[0]+A[2]*B[1],A[1]*B[0]+A[3]*B[1],A[0]*B[2]+A[2]*B[3],A[1]*B[2]+A[3]*B[3],A[0]*B[4]+A[2]*B[5]+A[4],A[1]*B[4]+A[3]*B[5]+A[5]]}
+  function T(x,y){return[1,0,0,1,x,y]}
+  function R(d){var r=d*Math.PI/180,c=Math.cos(r),s=Math.sin(r);return[c,s,-s,c,0,0]}
+  function S(x,y){return[x,0,0,y,0,0]}
+  // where the layer sits at rest: layer picture units -> scene
+  function base(L){var px=L.px*L.w,py=L.py*L.h;return mul(mul(mul(T(L.x+px,L.y+py),R(L.rot)),S(L.scale,L.scale)),T(-px,-py))}
+  // the layer's motion as a matrix in scene axes, around the layer's pivot
+  function mot(L,o){var cx=L.x+L.px*L.w,cy=L.y+L.py*L.h;return mul(mul(mul(T(cx+o.dx*L.w*L.scale,cy+o.dy*L.h*L.scale),R(o.rot)),S(Math.max(.001,o.sx),Math.max(.001,o.sy))),T(-cx,-cy))}
+  var ID=[1,0,0,1,0,0];
+  // every layer at time t of a clip: [{id, m:[a,b,c,d,e,f], op}] (m maps the layer's picture (0..w, 0..h) to the scene)
+  function frame(layers,clip,t){
+    var by={},i;for(i=0;i<layers.length;i++)by[layers[i].id]=layers[i];
+    function chain(L,d){
+      var list=L.anim&&L.anim[clip],M=ID,op=1;
+      if(list&&list.length){var o={dx:0,dy:0,rot:0,sx:1,sy:1,op:1};for(var j=0;j<list.length;j++)motion(list[j],t,o);M=mot(L,o);op=o.op}
+      var P=L.par&&by[L.par];
+      if(P&&P!==L&&d<4){var c=chain(P,d+1);M=mul(c.M,M);op*=c.op}
+      return{M:M,op:op};
+    }
+    return layers.map(function(L){var c=chain(L,0);return{id:L.id,m:mul(c.M,base(L)),op:(L.op==null?1:L.op)*c.op}});
+  }
+  function clips(layers){var n={},out=[];layers.forEach(function(L){if(L.anim)for(var k in L.anim)if(!n[k]&&L.anim[k].length){n[k]=1;out.push(k)}});return out}
+  // does the clip loop forever, and when do its one-shot motions end?
+  function info(layers,clip){
+    var loop=false,end=0;
+    layers.forEach(function(L){var l=L.anim&&L.anim[clip];if(l)l.forEach(function(m){if(m.mute)return;if(ONCE[m.k])end=Math.max(end,(m.dl||0)+Math.max(.05,m.dur==null?.5:m.dur));else loop=true})});
+    return{loop:loop,end:end};
+  }
+  // for the game: load(scene.json contents) gives an object that draws any clip at time t
+  function load(sc){
+    var L=(sc.layers||[]).map(function(l){return{id:l.file,par:l.parent||null,x:l.x,y:l.y,w:l.w,h:l.h,scale:l.scale==null?1:l.scale,rot:l.rotation||0,px:l.pivot?l.pivot.x:.5,py:l.pivot?l.pivot.y:.5,op:l.opacity==null?1:l.opacity,vis:l.visible!==false,z:l.z||0,anim:l.anim}}).sort(function(a,b){return a.z-b.z});
+    return{
+      layers:L,
+      clips:function(){return clips(L)},
+      info:function(c){return info(L,c)},
+      frame:function(c,t){return frame(L,c,t)},
+      // images = { "01-body.png": Image, ... }; o = { x, y (where on the canvas), scale, flip, origin:[sceneX, sceneY] (this scene point lands on x, y; e.g. the feet), group:"01-body.png" (draw only this layer and the parts attached to it) }
+      draw:function(ctx,images,clip,t,o){
+        o=o||{};var fr=frame(L,clip,t),keep=null,i,org=o.origin||[0,0];
+        if(o.group){keep={};keep[o.group]=1;for(var n=0;n<4;n++)L.forEach(function(l){if(l.par&&keep[l.par])keep[l.id]=1})}
+        ctx.save();ctx.translate(o.x||0,o.y||0);ctx.scale((o.scale||1)*(o.flip?-1:1),o.scale||1);ctx.translate(-org[0],-org[1]);
+        for(i=0;i<L.length;i++){
+          var l=L[i];if(!l.vis||(keep&&!keep[l.id]))continue;var img=images[l.id];if(!img)continue;
+          var m=fr[i].m;ctx.save();ctx.globalAlpha=Math.max(0,Math.min(1,fr[i].op));ctx.transform(m[0],m[1],m[2],m[3],m[4],m[5]);ctx.drawImage(img,0,0,l.w,l.h);ctx.restore();
+        }
+        ctx.restore();
+      }
+    };
+  }
+  return{frame:frame,info:info,clips:clips,load:load,version:1};
+}
+const ENGA=lfAnimEngine();
+const ANE=['out','in','inout','back','bounce','linear'],AND=['left','right','top','bottom'];
+const ANK={ // kinds: p = the settings shown, au = what "amount" means, ra / rf = where roll picks amount / speed
+  bob:{l:'bob up and down',p:['a','f','ph','b','dl'],au:'height %',ra:[2,12],rf:[.4,2],def:{a:6,f:1,ph:0,b:0,dl:0}},
+  sway:{l:'sway side to side',p:['a','f','ph','b','dl'],au:'distance %',ra:[2,12],rf:[.3,1.6],def:{a:5,f:.8,ph:0,b:0,dl:0}},
+  tilt:{l:'tilt / swing',p:['a','f','ph','b','dl'],au:'angle °',ra:[4,25],rf:[.3,1.8],def:{a:10,f:1,ph:0,b:0,dl:0},amax:180},
+  breathe:{l:'breathe',p:['a','f','ph','dl'],au:'amount %',ra:[2,8],rf:[.3,.8],def:{a:4,f:.5,ph:0,dl:0}},
+  pulse:{l:'pulse',p:['a','f','ph','dl'],au:'amount %',ra:[4,20],rf:[.6,2.5],def:{a:10,f:1.2,ph:0,dl:0}},
+  bounce:{l:'bounce (squashes)',p:['a','f','ph','dl'],au:'height %',ra:[10,60],rf:[.6,1.6],def:{a:30,f:1,ph:0,dl:0}},
+  hop:{l:'hop (jump, rest)',p:['a','f','ph','dl'],au:'height %',ra:[20,80],rf:[.4,1.2],def:{a:50,f:.8,ph:0,dl:0}},
+  spin:{l:'spin',p:['f','ph','dl'],au:'',ra:[0,0],rf:[.2,1.5],def:{a:0,f:.5,ph:0,dl:0}},
+  orbit:{l:'float in a circle',p:['a','f','ph','dl'],au:'radius %',ra:[3,15],rf:[.2,.8],def:{a:6,f:.4,ph:0,dl:0}},
+  shake:{l:'shake',p:['a','f','dl'],au:'strength %',ra:[1,6],rf:[1,4],def:{a:3,f:2,ph:0,dl:0}},
+  wiggle:{l:'wiggle (random turn)',p:['a','f','ph','dl'],au:'angle °',ra:[3,20],rf:[.5,3],def:{a:8,f:1.5,ph:0,dl:0},amax:180},
+  flicker:{l:'flicker',p:['a','f','dl'],au:'depth %',ra:[20,80],rf:[1,4],def:{a:50,f:2,ph:0,dl:0},amax:100},
+  fadein:{l:'fade in',once:1,p:['dur','dl','e'],au:'',ra:[0,0],rf:[1,1],def:{dur:.6,dl:0,e:'out'}},
+  fadeout:{l:'fade out',once:1,p:['dur','dl','e'],au:'',ra:[0,0],rf:[1,1],def:{dur:.6,dl:0,e:'out'}},
+  slidein:{l:'slide in',once:1,p:['a','dur','dl','e','d'],au:'distance %',ra:[40,150],rf:[1,1],def:{a:100,dur:.6,dl:0,e:'out',d:'left'}},
+  popin:{l:'pop in',once:1,p:['dur','dl','e'],au:'',ra:[0,0],rf:[1,1],def:{dur:.5,dl:0,e:'back'}},
+  dropin:{l:'drop in',once:1,p:['a','dur','dl','e'],au:'height %',ra:[60,200],rf:[1,1],def:{a:120,dur:.8,dl:0,e:'bounce'}}
+};
+const ANP_={a:['amount',0,300,.1],f:['speed',-8,8,.05],ph:['offset',0,1,.01],b:['rest offset',-100,100,.5],dl:['start after',0,10,.05],dur:['takes',.05,5,.05]};
+const anRnd=(a,b)=>a+Math.random()*(b-a);
+function animCleanM(o){
+  const K=ANK[o&&o.k];if(!K)return null;const m={k:o.k};
+  for(const p of ['a','f','ph','b','dl','dur']){const v=+o[p];if(o[p]==null||!isFinite(v))continue;let lo=ANP_[p][1],hi=ANP_[p][2];if(p==='a'&&K.amax)hi=K.amax;m[p]=Math.round(Math.min(hi,Math.max(lo,v))*1000)/1000}
+  for(const p of K.p)if(m[p]==null&&K.def[p]!=null)m[p]=K.def[p];
+  if(K.once){m.e=ANE.includes(o.e)?o.e:K.def.e;if(K.p.includes('d'))m.d=AND.includes(o.d)?o.d:'left'}
+  if(o.mute)m.mute=true;return m;
+}
+function animCleanAll(a){const out={};if(a&&typeof a==='object')for(const c of Object.keys(a).slice(0,24)){if(!Array.isArray(a[c]))continue;const l=a[c].slice(0,24).map(animCleanM).filter(Boolean);if(l.length)out[String(c).slice(0,24)]=l}return Object.keys(out).length?out:undefined}
+const animClone=a=>a?JSON.parse(JSON.stringify(a)):{};
+var ans={open:false,clip:'',playing:true,t:0,last:0,speed:1,solo:false,sel:0,rig:{style:'walk',F:1.2,swing:28,bounce:4},extra:new Set()};
+const ANROLES=[['','– none –'],['body','body'],['head','head'],['arm','arm (a)'],['arm2','arm (b)'],['leg','leg (a)'],['leg2','leg (b)'],['tail','tail'],['wing','wing (a)'],['wing2','wing (b)'],['extra','floppy bit']];
+const ANR={walk:{F:[.7,1.6],swing:[18,40],bounce:[2,8]},run:{F:[1.3,2.4],swing:[28,50],bounce:[5,12]},idle:{F:[.25,.7],swing:[3,8],bounce:[0,2]},fly:{F:[1.5,3.5],swing:[25,50],bounce:[1,5]},hop:{F:[.7,1.4],swing:[8,20],bounce:[20,50]}};
+const anLayer=()=>sel();
+function anFamily(){const L=sel();if(!L)return[];const root=(L.par&&state.layers.find(p=>p.id===L.par))||L;return [root,...state.layers.filter(c=>c.par===root.id)]}
+const anFamilySet=()=>new Set(anFamily().map(l=>l.id));
+function animFrameNow(){
+  if(!ans.playing||!ans.clip)return null;
+  const now=performance.now(),dt=Math.min(.1,(now-(ans.last||now))/1000);ans.last=now;ans.t+=dt*ans.speed;
+  const inf=ENGA.info(state.layers,ans.clip);if(!inf.loop&&inf.end>0&&ans.t>inf.end+.8)ans.t=0;
+  const fr=ENGA.frame(state.layers,ans.clip,ans.t),mp=new Map(),fam=ans.solo?anFamilySet():null;
+  for(const f of fr)if(!fam||fam.has(f.id))mp.set(f.id,f);
+  return mp;
+}
+function animEdit(L,fn,key){
+  edit(()=>{const a=animClone(L.anim),list=a[ans.clip]||(a[ans.clip]=[]);fn(list);for(const k of Object.keys(a))if(!a[k].length)delete a[k];if(Object.keys(a).length)L.anim=a;else delete L.anim},key);
+}
+const anList=L=>(L&&L.anim&&L.anim[ans.clip])||[];
+function anClipNames(){const s=new Set(ENGA.clips(state.layers));for(const c of ans.extra)s.add(c);if(ans.clip)s.add(ans.clip);return[...s]}
+const anNew=k=>({k,...ANK[k].def});
+function anRoll(m){
+  const K=ANK[m.k],n={...m};
+  if(K.p.includes('a')&&K.ra[1]>0)n.a=Math.round(anRnd(K.ra[0],K.ra[1])*10)/10;
+  if(K.p.includes('f'))n.f=Math.round(anRnd(K.rf[0],K.rf[1])*100)/100;
+  if(K.p.includes('ph'))n.ph=Math.round(Math.random()*100)/100;
+  if(K.once){n.dur=Math.round(anRnd(.3,1)*100)/100;n.e=ANE[Math.floor(Math.random()*5)];if(K.p.includes('d'))n.d=AND[Math.floor(Math.random()*4)]}
+  return animCleanM(n);
+}
+function anMutate(m,amt){
+  const K=ANK[m.k],n={...m},j=(v,lo,hi)=>Math.min(hi,Math.max(lo,v+(Math.random()-.5)*2*amt*.4*(hi-lo)*.25));
+  if(K.p.includes('a')&&K.ra[1]>0)n.a=j(m.a,K.ra[0]*.5,K.ra[1]*1.6);
+  if(K.p.includes('f'))n.f=j(m.f,K.rf[0]*.6,K.rf[1]*1.4);
+  if(K.p.includes('ph'))n.ph=((m.ph||0)+(Math.random()-.5)*amt*.5+1)%1;
+  if(K.once)n.dur=j(m.dur,.2,1.4);
+  return animCleanM(n);
+}
+/* puppet rigs: each part gets motions for its role, built from three dials */
+function rigMotions(style,role,P){
+  const F=P.F,sw=P.swing,bn=P.bounce,j=()=>(Math.random()-.5)*.06,m=(k,a,f,ph,b)=>animCleanM({k,a,f,ph:((ph+j())%1+1)%1,b:b||0,dl:0});
+  let S;
+  if(style==='walk'||style==='run'){
+    const run=style==='run',lean=run?6:0;
+    S={body:[m('bob',bn,2*F,.25),m('tilt',run?3:1.5,F,0,lean)],head:[m('tilt',3,2*F,.5,-lean*.5),m('bob',bn*.25,2*F,.4)],arm:[m('tilt',sw*.7,F,.5)],arm2:[m('tilt',sw*.7,F,0)],leg:[m('tilt',sw,F,0)],leg2:[m('tilt',sw,F,.5)],tail:[m('tilt',run?14:8,F,.25)],wing:[m('tilt',6,F,.1)],wing2:[m('tilt',6,F,.6)],extra:[m('tilt',run?10:5,2*F,.3)]};
+  }else if(style==='idle'){
+    S={body:[m('breathe',Math.max(1,sw*.25),F,0)],head:[m('tilt',sw*.35,F,.2),m('bob',bn*.5+.3,F,.3)],arm:[m('tilt',sw*.5,F,.1)],arm2:[m('tilt',sw*.5,F,.6)],leg:[],leg2:[],tail:[m('tilt',sw*1.2,F*1.4,.25)],wing:[m('tilt',sw*.6,F,.1)],wing2:[m('tilt',sw*.6,F,.6)],extra:[m('tilt',sw*.6,F*1.5,.3)]};
+  }else if(style==='fly'){
+    S={body:[m('bob',bn*1.2,F,.25)],head:[m('tilt',3,F,.5)],arm:[m('tilt',sw*.25,F,.5)],arm2:[m('tilt',sw*.25,F,0)],leg:[m('tilt',sw*.2,F*.6,.3)],leg2:[m('tilt',sw*.2,F*.6,.6)],tail:[m('tilt',14,F*.6,.25)],wing:[m('tilt',sw*1.4,F,0)],wing2:[m('tilt',sw*1.4,F,.5)],extra:[m('tilt',8,F,.3)]};
+  }else{ // hop
+    S={body:[m('hop',bn,F,0)],head:[m('tilt',4,F,.3)],arm:[m('tilt',sw,F,.15)],arm2:[m('tilt',sw,F,.65)],leg:[m('tilt',sw*.8,F,0)],leg2:[m('tilt',sw*.8,F,0)],tail:[m('tilt',10,F,.4)],wing:[m('tilt',8,F,.2)],wing2:[m('tilt',8,F,.7)],extra:[m('tilt',8,F,.35)]};
+  }
+  return (S[role]||[]).filter(Boolean);
+}
+function rigApply(){
+  const fam=anFamily().filter(p=>p.role);if(!fam.length)return;
+  edit(()=>{for(const p of fam){const a=animClone(p.anim),l=rigMotions(ans.rig.style,p.role,ans.rig);if(l.length)a[ans.clip]=l;else delete a[ans.clip];if(Object.keys(a).length)p.anim=a;else delete p.anim}},'rig');
+}
+function rigRoll(){const R=ANR[ans.rig.style];for(const k of ['F','swing','bounce'])ans.rig[k]=Math.round(anRnd(R[k][0],R[k][1])*100)/100;rigApply()}
+function anGuess(){
+  const fam=anFamily(),cnt={};
+  edit(()=>{fam.forEach((p,i)=>{
+    const n=p.name.toLowerCase();let r='';
+    if(/head|face|skull|helmet/.test(n))r='head';else if(/arm|hand|shoulder/.test(n))r='arm';else if(/leg|foot|feet|shoe|boot|thigh|knee/.test(n))r='leg';else if(/tail/.test(n))r='tail';else if(/wing/.test(n))r='wing';else if(/body|torso|chest|main|trunk/.test(n)||i===0)r='body';else r='extra';
+    if(r==='arm'||r==='leg'||r==='wing'){
+      const right=/right|(^|[ _-])r($|[ _-])/.test(n),left=/left|(^|[ _-])l($|[ _-])/.test(n);
+      cnt[r]=(cnt[r]||0)+1;r=right?r+'2':left?r:(cnt[r]%2===0?r+'2':r);
+    }
+    p.role=r;
+  })},'roles');
+}
+function anBBox(id){
+  const r=store.get(id);if(!r||!r.mask)return null;const {mask,mw,mh}=r;let x0=mw,y0=mh,x1=-1,y1=-1;
+  for(let y=0;y<mh;y++)for(let x=0;x<mw;x++)if(mask[y*mw+x]>40){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+  return x1<0?null:{x0:x0/mw,x1:(x1+1)/mw,y0:y0/mh,y1:(y1+1)/mh};
+}
+function anPivots(){
+  const fam=anFamily(),root=fam[0];if(!root)return;
+  edit(()=>{for(const p of fam){
+    if(!p.role)continue;const b=anBBox(p.id);if(!b)continue;const cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2,h=b.y1-b.y0;let px=cx,py=cy;
+    if(p.role==='body'){py=b.y1-h*.02}
+    else if(p.role==='head'){py=b.y1-h*.06}
+    else if(p.role==='arm'||p.role==='arm2'||p.role==='leg'||p.role==='leg2'){py=b.y0+h*.05}
+    else{const rc=root.x+root.w*root.scale*.5,pc=p.x+p.w*p.scale*cx;px=pc>rc?b.x0+(b.x1-b.x0)*.05:b.x1-(b.x1-b.x0)*.05;py=cy}
+    setPivot(p,Math.max(0,Math.min(1,px)),Math.max(0,Math.min(1,py)));
+  }},'pivots');
+}
+/* ----- the panel ----- */
+const ANP=$('#anp');
+function anBuild(){
+  const kindOpts=Object.keys(ANK).map(k=>`<option value="${k}">${ANK[k].l}</option>`).join('');
+  ANP.innerHTML=`<div class="fxsec"><div class="fxh">$ animate <span class="dim" id="anwho"></span></div>
+  <div class="fxbig"><select id="anclip" aria-label="clip"></select><button class="sm" id="andelclip" title="remove this clip from every layer">× clip</button></div>
+  <div class="fxbig"><input id="annew" class="fxn anname" placeholder="new clip: walk, idle, hit…" maxlength="24" spellcheck="false" aria-label="new clip name"><button class="sm" id="anaddclip">＋ clip</button></div>
+  <div class="fxbig"><button class="btn-clay" id="anplay">■ stop</button><button class="sm" id="anrep" title="start the clip again from the beginning">↺ replay</button><select id="anspd" aria-label="speed"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option></select><label class="ck"><input type="checkbox" id="ansolo"> only this character</label></div>
+  <div class="dim" id="anhint"></div></div>
+  <div class="fxsec"><div class="fxh">$ motions <span class="dim" id="anmh"></span></div><div id="anlist"></div>
+  <div class="fxbig"><select id="annewk" aria-label="kind of motion">${kindOpts}</select><button class="sm" id="anaddm" title="add this motion to the layer">＋ add motion</button><button class="sm" id="anrollall" title="roll every motion on this layer">🎲 all</button></div>
+  <div id="anedit" hidden>
+    <div class="fxbig"><select id="ankind" aria-label="kind">${kindOpts}</select><button class="btn-clay" id="anroll" title="new random numbers for this motion">🎲 roll</button></div>
+    <div class="fxbig"><button class="sm" id="anmut" title="small changes">↻ mutate</button><input type="range" id="anamt" min="0.05" max="1" step="0.05" value="0.3" aria-label="how much to change"></div>
+    ${['a','f','ph','b','dl','dur'].map(k=>`<div class="fxrow" data-anrow="${k}"><label>${ANP_[k][0]}</label><input type="range" min="${ANP_[k][1]}" max="${ANP_[k][2]}" step="${ANP_[k][3]}" data-an="${k}" aria-label="${ANP_[k][0]}"><input type="number" class="fxn" data-ann="${k}" step="any" aria-label="${ANP_[k][0]} (type a number)"></div>`).join('')}
+    <div class="fxrow" data-anrow="e"><label>easing</label><select id="ane" aria-label="easing">${ANE.map(e=>`<option>${e}</option>`).join('')}</select></div>
+    <div class="fxrow" data-anrow="d"><label>comes from</label><select id="and" aria-label="direction">${AND.map(e=>`<option>${e}</option>`).join('')}</select></div>
+  </div></div>
+  <div class="fxsec" id="anrigsec"><div class="fxh">$ puppet <span class="dim">· one character made of parts</span></div>
+  <div class="dim" id="anrighint" style="margin-bottom:8px"></div><div id="anparts"></div>
+  <div class="fxbig"><button class="sm" id="anguess" title="guess a role for each part from its name">guess roles</button><button class="sm" id="anpiv" title="put every part's pivot at its joint (hip, shoulder, neck…); ctrl+z undoes it">set pivots</button></div>
+  <div class="fxbig"><select id="anstyle" aria-label="style">${Object.keys(ANR).map(k=>`<option>${k}</option>`).join('')}</select><button class="btn-clay" id="anrigroll" title="random speed, swing and bounce, then rebuild the motions">🎲 roll</button></div>
+  ${[['F','speed','cycles/s',.1,4,.05],['swing','swing','°',0,70,.5],['bounce','bounce','%',0,60,.5]].map(a=>`<div class="fxrow"><label>${a[1]}</label><input type="range" min="${a[3]}" max="${a[4]}" step="${a[5]}" data-rg="${a[0]}" aria-label="${a[1]}"><input type="number" class="fxn" data-rgn="${a[0]}" step="any" aria-label="${a[1]} (type a number)"></div>`).join('')}
+  <div class="dim">style and sliders rebuild the motions of every part that has a role (your hand-tweaks on those parts are replaced)</div></div>`;
+}
+anBuild();
+function anRefresh(){
+  if(!ans.open)return;
+  const L=sel(),A=document.activeElement,fam=anFamily();
+  const names=anClipNames();if(!ans.clip)ans.clip=names[0]||'idle';
+  $('#anclip').innerHTML=anClipNames().map(c=>`<option${c===ans.clip?' selected':''}>${esc(c)}</option>`).join('');
+  $('#anplay').textContent=ans.playing?'■ stop':'▶ play';$('#ansolo').checked=ans.solo;$('#anspd').value=String(ans.speed);
+  $('#anwho').textContent=L?'· '+L.name:'';
+  $('#anhint').textContent=L?'':'select a layer (click it on the canvas or in the layers panel)';
+  const list=anList(L);if(ans.sel>=list.length)ans.sel=Math.max(0,list.length-1);
+  $('#anmh').textContent=L?'on "'+L.name+'" in clip "'+ans.clip+'"':'';
+  $('#anlist').innerHTML=!L?'':list.length?list.map((m,i)=>`<div class="fxem${i===ans.sel?' on':''}${m.mute?' off':''}"><button class="emn" data-ansel="${i}" title="edit this motion">${i+1} · ${ANK[m.k].l}${m.a!=null&&ANK[m.k].au?' · '+m.a+(ANK[m.k].au.includes('%')?'%':'°'):''}${m.dl?' · +'+m.dl+'s':''}</button><button class="sm" data-anmute="${i}" title="${m.mute?'switch on':'switch off'}" aria-label="mute motion">${m.mute?'○':'●'}</button><button class="sm" data-andel="${i}" title="remove this motion" aria-label="remove motion">×</button></div>`).join(''):'<div class="dim" style="margin-bottom:8px">no motion yet · pick a kind and ＋ add motion</div>';
+  const m=list[ans.sel],ed=$('#anedit');ed.hidden=!m;
+  if(m){
+    const K=ANK[m.k];$('#ankind').value=m.k;
+    for(const k of ['a','f','ph','b','dl','dur']){
+      const row=$(`[data-anrow="${k}"]`,ed),on=K.p.includes(k);row.hidden=!on;if(!on)continue;
+      const lab=k==='a'?(K.au||'amount'):ANP_[k][0],mx=k==='a'&&K.amax?K.amax:ANP_[k][2];
+      $('label',row).textContent=k==='f'&&m.k==='spin'?'turns/s':lab;
+      const sl=$('[data-an]',row),nn=$('[data-ann]',row);sl.max=mx;
+      const v=m[k]==null?K.def[k]:m[k];if(sl!==A)sl.value=v;if(nn!==A)nn.value=Math.round(v*1000)/1000;
+    }
+    $('[data-anrow="e"]',ed).hidden=!K.once;$('[data-anrow="d"]',ed).hidden=!K.p.includes('d');
+    if(K.once){$('#ane').value=m.e||K.def.e;if(K.p.includes('d'))$('#and').value=m.d||'left'}
+  }
+  // puppet
+  const root=fam[0],kids=fam.length>1;
+  $('#anrighint').textContent=!L?'':kids?'parts of "'+root.name+'": give each a role, set pivots, pick a style':'this layer has no attached parts. Cut parts out with "attach to original" ticked (or ⛓ attach in the layers panel), then they show up here';
+  $('#anparts').innerHTML=kids?fam.map(p=>`<div class="fxrow"><label title="${esc(p.name)}" class="anpn">${esc(p.name)}</label><select data-role="${p.id}" aria-label="role of ${esc(p.name)}">${ANROLES.map(r=>`<option value="${r[0]}"${(p.role||'')===r[0]?' selected':''}>${r[1]}</option>`).join('')}</select></div>`).join(''):'';
+  $('#anguess').disabled=$('#anpiv').disabled=$('#anrigroll').disabled=!kids;
+  $('#anstyle').value=ans.rig.style;
+  for(const k of ['F','swing','bounce']){const sl=$(`[data-rg="${k}"]`),nn=$(`[data-rgn="${k}"]`);if(sl!==A)sl.value=ans.rig[k];if(nn!==A)nn.value=Math.round(ans.rig[k]*1000)/1000}
+}
+function animOpen(){
+  if(typeof fxClose==='function')fxClose();
+  ans.open=true;ANP.classList.add('show');$('#tab-anim').classList.add('on');$('#tab-canvas').classList.remove('on');
+  if(!ans.clip)ans.clip=ENGA.clips(state.layers)[0]||'idle';
+  ans.playing=true;ans.last=0;ans.t=0;anRefresh();draw();
+}
+function animClose(){if(!ans.open)return;ans.open=false;ANP.classList.remove('show');$('#tab-anim').classList.remove('on');$('#tab-canvas').classList.add('on');draw()}
+const anSet=(k,v)=>{const L=sel();if(!L)return;animEdit(L,list=>{const m=list[ans.sel];if(m){const n=animCleanM({...m,[k]:v});if(n)list[ans.sel]=n}},'an'+L.id+ans.sel+k)};
+ANP.addEventListener('input',e=>{
+  const t=e.target;
+  if(t.dataset.an){anSet(t.dataset.an,+t.value);return}
+  if(t.dataset.ann){const v=parseFloat(t.value);if(isFinite(v))anSet(t.dataset.ann,v);return}
+  if(t.dataset.rg){ans.rig[t.dataset.rg]=+t.value;rigApply();return}
+  if(t.dataset.rgn){const v=parseFloat(t.value);if(isFinite(v)){ans.rig[t.dataset.rgn]=v;rigApply()}}
+});
+ANP.addEventListener('change',e=>{
+  const t=e.target,L=sel();
+  if(t.dataset.ann){anRefresh();return}
+  if(t.id==='anclip'){ans.clip=t.value;ans.sel=0;ans.t=0;anRefresh();draw();return}
+  if(t.id==='anspd'){ans.speed=+t.value;return}
+  if(t.id==='ansolo'){ans.solo=t.checked;draw();return}
+  if(t.id==='anstyle'){ans.rig.style=t.value;const R=ANR[t.value];for(const k of ['F','swing','bounce'])ans.rig[k]=Math.round(((R[k][0]+R[k][1])/2)*100)/100;rigApply();anRefresh();return}
+  if(t.dataset.role){const P=state.layers.find(l=>l.id===t.dataset.role);if(P)edit(()=>{if(t.value)P.role=t.value;else delete P.role});return}
+  if(!L)return;
+  if(t.id==='ankind'){animEdit(L,list=>{const m=list[ans.sel];if(m)list[ans.sel]={...anNew(t.value),dl:m.dl||0}})}
+  else if(t.id==='ane')anSet('e',t.value);else if(t.id==='and')anSet('d',t.value);
+});
+ANP.addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;const L=sel();
+  if(b.dataset.ansel!=null){ans.sel=+b.dataset.ansel;anRefresh();return}
+  if(b.id==='anplay'){ans.playing=!ans.playing;ans.last=0;if(ans.playing)ans.t=0;anRefresh();draw();return}
+  if(b.id==='anrep'){ans.t=0;ans.playing=true;ans.last=0;anRefresh();draw();return}
+  if(b.id==='anaddclip'){const n=slug($('#annew').value).slice(0,24);if(!n)return toast('type a name for the clip first','warn');ans.extra.add(n);ans.clip=n;ans.sel=0;$('#annew').value='';anRefresh();return}
+  if(b.id==='andelclip'){const c=ans.clip;if(!c)return;edit(()=>{for(const l of state.layers)if(l.anim&&l.anim[c]){const a=animClone(l.anim);delete a[c];if(Object.keys(a).length)l.anim=a;else delete l.anim}});ans.extra.delete(c);ans.clip=ENGA.clips(state.layers)[0]||'idle';ans.sel=0;anRefresh();return}
+  if(b.id==='anguess'){anGuess();return}
+  if(b.id==='anpiv'){anPivots();return}
+  if(b.id==='anrigroll'){rigRoll();anRefresh();return}
+  if(!L)return;
+  if(b.id==='anaddm'){const n=anList(L).length;animEdit(L,list=>{list.push(anNew($('#annewk').value))});ans.sel=n;ans.playing=true;ans.last=0;return}
+  if(b.dataset.anmute!=null){animEdit(L,list=>{const m=list[+b.dataset.anmute];if(m){if(m.mute)delete m.mute;else m.mute=true}});return}
+  if(b.dataset.andel!=null){animEdit(L,list=>{list.splice(+b.dataset.andel,1)});return}
+  if(b.id==='anroll'){animEdit(L,list=>{if(list[ans.sel])list[ans.sel]=anRoll(list[ans.sel])});return}
+  if(b.id==='anrollall'){animEdit(L,list=>{for(let i=0;i<list.length;i++)list[i]=anRoll(list[i])});return}
+  if(b.id==='anmut'){animEdit(L,list=>{if(list[ans.sel])list[ans.sel]=anMutate(list[ans.sel],+$('#anamt').value)});return}
+});
+for(const ev of ['pointerdown','pointermove','pointerup','wheel','keydown','keyup','dblclick','contextmenu'])ANP.addEventListener(ev,e=>e.stopPropagation());
+$('#tab-anim').onclick=()=>{ans.open?animClose():animOpen()};
+/* ----- saving for the game: scene.json carries each layer's anim and role; anim.js plays them ----- */
+const ANIM_RUNTIME=()=>`/* Layerforge animation runtime. Browser canvas 2D, no dependencies. See ANIM-README.md.\n   Usage: const rig = LayerforgeAnim.load(sceneJson) ; rig.draw(ctx, images, "walk", timeSeconds, {x, y, scale, flip, origin, group}) */\n(function(root){\nvar LayerforgeAnim=(${lfAnimEngine.toString()})();\nif(typeof module!=='undefined'&&module.exports)module.exports=LayerforgeAnim;else root.LayerforgeAnim=LayerforgeAnim;\n})(typeof window!=='undefined'?window:this);\n`;
+const ANIM_README=`# Layerforge animations for the game
+
+Motions are made in the app's anim tab and saved as plain numbers inside \`scene.json\`, on each layer: \`"anim": { "walk": [ {"k":"tilt","a":28,"f":1.2,"ph":0.5,"b":0,"dl":0}, ... ], "idle": [ ... ] }\`. A clip (\`walk\`, \`idle\`, \`hit\`...) is a name; every layer that has motions under that name takes part. Layers also carry \`parent\` (the file of the layer they are attached to) and \`role\` (body, head, arm, arm2, leg, leg2, tail, wing, wing2, extra) for puppet characters.
+
+Nothing is baked into pictures: the game draws the same layer PNGs and moves them. A child follows its parent's motion (a body bob carries the head and arms), and every layer turns / scales around its own pivot (\`pivot\` in scene.json, 0-1 across the layer: the hip, the shoulder, the neck).
+
+## Use it
+\`\`\`js
+const scene = await (await fetch('scene.json')).json();
+const rig = LayerforgeAnim.load(scene);                 // rig.clips() lists the clip names
+const images = {};                                      // { "01-body.png": Image, ... } one per layer file
+for (const l of scene.layers) { const im = new Image(); im.src = l.file; images[l.file] = im; }
+// every frame (t = seconds the clip has been playing, keep adding dt):
+rig.draw(ctx, images, 'walk', t, { x: 400, y: 600, scale: 0.5, flip: false, origin: [1900, 1500], group: '01-body.png' });
+\`\`\`
+- \`origin\` is a point in SCENE pixels (the character's feet, say) that lands on canvas position \`x, y\`; \`scale\` and \`flip\` (face left) apply around it. \`group\` draws only that layer and the parts attached to it, so several characters in one scene can be drawn separately. Without \`group\` every layer is drawn.
+- Looping motions (bob, sway, tilt, breathe, pulse, bounce, hop, spin, orbit, shake, wiggle, flicker) repeat forever. One-shot motions (fadein, fadeout, slidein, popin, dropin) finish and hold their end state. \`rig.info('walk')\` gives \`{loop, end}\`: whether anything loops, and when the one-shots end.
+- Need the numbers instead? \`rig.frame('walk', t)\` returns, for every layer in z order, \`{id, m:[a,b,c,d,e,f], op}\`: the canvas matrix that maps the layer's picture (0..w, 0..h) into the scene, and its final opacity. Use it with any renderer.
+- Switch clips by changing the name; restart a clip by setting \`t\` to 0.
+
+## Motion settings
+\`k\` kind; \`a\` amount (height / distance / radius / strength / depth in % of the layer's own height or width, angle in degrees for tilt and wiggle); \`f\` speed in cycles per second (spin: turns per second, negative = the other way); \`ph\` offset 0-1 of a cycle; \`b\` rest offset (same unit as the amount, for bob, sway and tilt); \`dl\` seconds before it starts; \`mute\` true = skipped. One-shot motions use \`dur\` (seconds it takes) and \`e\` (easing: out, in, inout, back, bounce, linear); slidein also has \`d\` (left, right, top, bottom: where it comes from).
+`;
+function animExportEntries(list){
+  if(!list.some(l=>l.anim))return[];const enc=new TextEncoder();
+  return[{name:'anim.js',data:enc.encode(ANIM_RUNTIME())},{name:'ANIM-README.md',data:enc.encode(ANIM_README)}];
+}
+window.__lf={ans,ENGA,animOpen,animClose,rigMotions,rigApply,rigRoll,anGuess,anPivots,animCleanAll,anRefresh,animFrameNow,sfxRoll,sfxMutate,sfxClean,fxAudio,fxs,fxRoll,fxMutate,fxOpen,fxClose,fxAddLayer,fxUpdateLayer,fxPlay,fxPlaying,fxOk,fxPoster,FXE,FXR,fxClean,fxExportEntries,fxLoad,shapeCreate,shapeLive,shapeCommit,shapeOk,renderShape,get sdrag(){return sdrag},cornersFlat,autoWandLayer,autoBgSel,planParse,openPlan,finishPlans,cropRef,syncChildren,tcache,finishPick,startPick,detachLayer,get pickPar(){return pickPar},dupLayer,makeVariants,feelPreview,feelApply,feelCancel,get fs(){return fs},get gb(){return gb},set gb(v){gb=v;gbBtn();draw()},gbToggle,gbHit,gbPts,enqueueUpscale,flattenScene,mergeLayers,selIds,msel,rdCut,get rd(){return rd},rdPaint,enqueueRedraw,getRefs,composePrompt,setRef,getRefs,cutRegion,get cs(){return cs},applyCut,state,store,view,brush,applyWand,cfg,jobs,enqueue,setTool,addBlank,importFiles,saveZip,zipBuild,zipRead,edit,undo,redo,fit}; // handy for debugging
 (async()=>{
   $('#sname').value=state.name;$('#sname').style.width='10ch';
   if(innerWidth<1000)document.body.classList.add('noside');
