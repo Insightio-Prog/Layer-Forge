@@ -2806,6 +2806,17 @@ const SFP=[ // key, label, min, max, step, default
   ['attack','attack',0,1,.01,0],['sustain','sustain',0,1,.01,.3],['punch','punch',0,1,.01,0],['decay','decay',0,1,.01,.4],
   ['lpf','low-pass',0,1,.01,1],['lpfR','low-pass slide',-1,1,.01,0],['lpfQ','resonance',0,1,.01,0],['hpf','high-pass',0,1,.01,0],['hpfR','high-pass slide',-1,1,.01,0],
   ['phaO','phaser',-1,1,.01,0],['phaR','phaser slide',-1,1,.01,0],['rep','repeat',0,1,.01,0],['vol','volume',0,1,.01,.5]];
+const SFN=[ // quick nudges: key, label, hint, changes {param:[add,mul]}
+  ['deep','⬇ deeper','lower pitch, darker, more bass',{freq:[-.07],lpf:[0,.85],hpf:[-.05]}],
+  ['high','⬆ higher','higher pitch, brighter',{freq:[.07],hpf:[.03]}],
+  ['long','↔ longer','sound lasts longer',{sustain:[.05],decay:[.07]}],
+  ['short','⇥ shorter','sound ends sooner',{sustain:[-.05],decay:[-.07]}],
+  ['dark','◐ darker','softer, less fizz',{lpf:[0,.8]}],
+  ['bright','◑ brighter','more fizz and edge',{lpf:[.1],hpf:[.02]}],
+  ['punch','✊ punchier','harder hit at the start',{punch:[.12]}],
+  ['soft','☁ softer','gentler start',{punch:[-.12],attack:[.04]}],
+  ['slow','🐢 slower fall','pitch drops more slowly',{ramp:[.08]}],
+  ['fast','🐇 faster fall','pitch drops more quickly',{ramp:[-.08]}]];
 const SFWAVES=['square','saw','sine','noise'];
 const sr=()=>Math.random(),si=n=>Math.floor(Math.random()*(n+1)); // si(1) = 0 or 1, si(2) = 0..2 ... (like sfxr's rnd(n))
 const SFG={ // each makes a fresh random sound of its kind; anything not set stays at the default
@@ -2876,7 +2887,9 @@ function sndBuild(){
     <div class="fxbig"><button class="sm" id="sndmut" title="small changes to this sound">↻ mutate</button><input type="range" id="sndamt" min="0.05" max="1" step="0.05" value="0.3" aria-label="how much to change"><button class="sm" id="sndhear" title="play the whole effect again, with its sounds">▶ hear</button></div>
     <div class="fxrow"><label>start at</label><input type="number" class="fxn" id="sndat" min="0" max="10" step="any" aria-label="seconds after the effect starts"><span class="dim">s after the effect starts</span></div>
     <div class="fxrow"><label>wave</label><select id="sndwave" aria-label="wave">${SFWAVES.map((w,i)=>`<option value="${i}">${w}</option>`).join('')}</select></div>
-    <details id="sndmore"><summary class="dim">▾ tweak the sound (all the sliders)</summary>${rows}</details>
+    <div class="dim" style="margin:6px 0 2px">quick nudges · tap again to go further</div>
+    <div class="fxbig" style="flex-wrap:wrap">${SFN.map(n=>`<button class="sm" data-snn="${n[0]}" title="${n[2]}">${n[1]}</button>`).join('')}</div>
+    <details id="sndmore" open><summary class="btn-clay" style="display:block;padding:8px 10px;border-radius:6px;cursor:pointer;margin:8px 0">🎚 tweak the sound · all the sliders</summary>${rows}</details>
   </div></div>`;
 }
 function sndDraw(){
@@ -3026,6 +3039,7 @@ $('#fxc').addEventListener('click',e=>{
   if(b.id==='sndadd'){if(fxs.snd.length>=4)return toast('4 sounds is the most for one effect','warn');fxs.snd.push(sfxRoll($('#sndnew').value));fxs.ssel=fxs.snd.length-1;fxs.sound=true;sndDraw();fxRestart();return}
   const s=fxs.snd[fxs.ssel];if(!s)return;
   if(b.id==='sndroll'){fxs.snd[fxs.ssel]=sfxRoll(s.preset,s);sndDraw();fxRestart()}
+  else if(b.dataset.snn&&s){const n=SFN.find(q=>q[0]===b.dataset.snn),q={...s};for(const k in n[3]){const[ad,mu]=n[3][k];q[k]=(s[k]+(ad||0))*(mu||1)}fxs.snd[fxs.ssel]=sfxClean(q);sndDraw();fxRestart()}
   else if(b.id==='sndmut'){fxs.snd[fxs.ssel]=sfxMutate(s,fxs.samount);sndDraw();fxRestart()}
   else if(b.id==='sndhear'){fxs.sound=true;sndDraw();fxRestart()}
 });
