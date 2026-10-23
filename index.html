@@ -176,7 +176,9 @@ body.noside #side-open{display:grid}
 
 /* prompt bar */
 #prompt{grid-area:prompt;display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--bg);border-top:1px solid var(--line)}
-#prompt .lbl{color:var(--clay);font-weight:700}
+#prompt .lbl{color:var(--clay);font-weight:700;background:none;border:1px solid transparent;border-radius:6px;padding:6px 8px;cursor:pointer;font:inherit;font-weight:700;white-space:nowrap}#prompt .lbl:hover{border-color:var(--line2);background:var(--raised)}
+#modal .ck,#modal .line>label{display:inline-flex;gap:8px;align-items:center}
+#presets{position:fixed;z-index:30;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:6px;display:flex;flex-direction:column;gap:2px;max-width:min(420px,calc(100vw - 16px));box-shadow:0 8px 30px rgba(0,0,0,.5)}#presets[hidden]{display:none}#presets button{display:flex;gap:10px;align-items:flex-start;text-align:left;background:none;border:0;border-radius:6px;padding:8px 10px;color:var(--text);font:inherit;cursor:pointer}#presets button:hover{background:var(--raised)}#presets .pi{font-size:18px;width:24px;text-align:center}#presets b{display:block;font-weight:600}#presets .dim{display:block;font-size:11px;margin-top:2px}
 #prompt input{flex:1;height:44px;min-width:0;background:var(--raised);border:1px solid var(--line);border-radius:8px;padding:0 14px}
 #prompt input::placeholder{color:var(--dim)}
 .target{border:1px solid var(--line);border-radius:8px;padding:2px 14px;font-size:11px;color:var(--dim);line-height:1.35;height:48px;display:flex;flex-direction:column;justify-content:center;max-width:220px;white-space:nowrap}
@@ -344,7 +346,7 @@ select option:checked,select option:hover{background:#3a2a22;color:#e9a98f}
   </aside>
 
   <footer id="prompt">
-    <span class="lbl">$ make:</span>
+    <button class="lbl" id="make-pre" type="button" aria-haspopup="true" aria-expanded="false" title="presets: new character from a picture, layer plan, ...">$ make: ▾</button>
     <input id="make" placeholder="describe the next layer…" aria-label="ai prompt" autocomplete="off" spellcheck="false">
     <select id="gkind" class="psel" aria-label="layer type" title="element = transparent cut-out, background = fills the scene"><option value="element">element</option><option value="background">background</option></select>
     <select id="gprov" class="psel" aria-label="image model provider" title="which ai paints the layer"><option value="openai">openai</option><option value="gemini">gemini</option></select>
@@ -1110,6 +1112,79 @@ async function finishPlans(){
   }
 }
 $('#gplan-b').onclick=openPlan;
+/* ---------- make presets: click "$ make:" ---------- the first one turns a picture of a character into parts for every view, ready for the anim tab */
+const CHV=[['down','front','seen from the front, facing the viewer'],['side','side','in pure side profile, facing right'],['up','back','seen from directly behind'],['diag down','¾ front','in three-quarter view from the front, facing front-right'],['diag up','¾ back','in three-quarter view from behind, facing back-right']];
+function charParts(dir,o){ // the parts of one view: key (name end), role, what to draw, box (fractions of the character height, x from the view's centre)
+  const side=dir==='side',diag=dir==='diag down'||dir==='diag up',tw=side?.22:diag?.27:.30;
+  const arm=side?[[0,'arm','near arm'],[.02,'arm 2','far arm']]:diag?[[-.18,'arm','arm'],[.17,'arm 2','arm']]:[[-.20,'arm','arm'],[.20,'arm 2','arm']];
+  const leg=side?[[-.03,'leg','near leg'],[.03,'leg 2','far leg']]:diag?[[-.06,'leg','leg'],[.06,'leg 2','leg']]:[[-.075,'leg','leg'],[.075,'leg 2','leg']];
+  const P=[{key:'',label:'body',role:'body',desc:'the TORSO: the body from the neck down to the hips including the clothes, WITHOUT the head, arms or legs. Draw the neck, shoulder and hip ends fully so the other parts can overlap them',box:[0,.27,tw,.32]},
+    {key:' head',label:'head',role:'head',desc:'the HEAD: all hair, the face, ears and any hat, plus a short neck stub',box:[0,0,.34,.30]}];
+  if(o.arms)arm.forEach((a,i)=>P.push({key:' '+a[1],label:a[1],role:i?'arm2':'arm',behind:side&&i===1,desc:'ONE ARM ('+a[2]+'): the whole arm from the shoulder to the hand, hanging straight down and relaxed, with a rounded shoulder end',box:[a[0],.29,.10,.36]}));
+  if(o.legs)leg.forEach((a,i)=>P.push({key:' '+a[1],label:a[1],role:i?'leg2':'leg',behind:side&&i===1,desc:'ONE LEG ('+a[2]+'): the whole leg from the hip to the foot including the shoe, standing straight, with a rounded hip end',box:[a[0],.58,.13,.42]}));
+  if(o.tail)P.push({key:' tail',label:'tail',role:'tail',behind:true,desc:'the TAIL: hanging down behind the body, with a rounded root end',box:[side?-.26:.0,.50,.22,.24]});
+  return P;
+}
+function charPrompt(j,n,green){
+  const m=n?(j.ref||'scene'):'none',c=j.char;
+  const refTxt=m==='both'?'The first attached picture shows the parts of this character that are already drawn, in place; the second is the original character reference.':m==='ref'?'The attached picture is the reference of the character.':'';
+  const bg=green?'Use a perfectly flat, solid, pure green (#00FF00) background with no shadows, gradient or texture. ':'The background must be transparent. ';
+  return `${refTxt} Task: output a NEW picture that contains ONLY ${c.desc}, of the character in the reference, ${c.view}. It is one cut-out layer for a 2D cut-out animation puppet, so draw just this part: complete, isolated and upright, as large as the frame allows with a small margin, nothing cropped. Match the character's art style, colours, line work, outfit and proportions exactly.${c.note?' '+c.note+'.':''} Every other body part, the background, shadows and text must be left empty. ${bg}No text, no frame, no border.`.trim();
+}
+function charQueue(o){
+  const id=++planN,list=[],W=state.W,H=state.H,Hc=Math.min(o.H,H-120),y0=Math.round((H-Hc)/2),views=CHV.filter(v=>o.views.includes(v[0])),root=v=>o.name+' '+v[0];
+  views.forEach((v,vi)=>{
+    const cx=Math.round((vi+.5)*W/views.length);
+    charParts(v[0],o).forEach(p=>{
+      const bw=p.box[2]*Hc,bh=p.box[3]*Hc,name=root(v)+p.key;
+      list.push({id:++jobN,text:name,kind:'element',white:false,box:{cx:Math.round(cx+p.box[0]*Hc),cy:Math.round(y0+p.box[1]*Hc+bh/2),w:Math.round(bw),h:Math.round(bh),rot:0},layerId:null,provider:cfg.provider,ref:vi?'both':'ref',refWhole:true,afterId:null,pos:'top',status:'queued',name,ac:null,
+        char:{desc:p.desc,view:v[2],note:o.note},plan:{id,key:name,parent:p.key?root(v):null,tints:null,role:p.role,behind:!!p.behind}});
+    });
+  });
+  jobs.push(...list);return list.length;
+}
+function openCharacter(){
+  let saved={};try{saved=JSON.parse(localStorage.getItem('lf-char')||'{}')}catch(_){}
+  const sv=Array.isArray(saved.views)&&saved.views.length?saved.views:['down','side'];
+  openModal(`<h2><span class="d">$</span> new character from a picture</h2>
+    <div class="dim">attach one picture of your character. Layerforge redraws it as separate parts (body, head, arms, legs) for each view you pick, attached together and named so the anim tab and the game's direction picker find them.</div>
+    <div style="display:flex;gap:12px;align-items:center;margin:10px 0"><img id="ch-img" alt="" style="width:92px;height:92px;object-fit:contain;background:#0d0d0c;border:1px solid var(--line2);border-radius:6px"><div><button class="sm" id="ch-pick">attach / change picture</button><div class="dim" id="ch-pm" style="margin-top:4px"></div></div><input type="file" id="ch-file" accept="image/*" hidden></div>
+    <div class="line" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0"><label class="dim">name <input id="ch-name" value="${esc(saved.name||'hero')}" maxlength="20" style="width:130px;height:32px;background:var(--raised);border:1px solid var(--line2);border-radius:6px;padding:0 8px;color:var(--text);font:inherit"></label><label class="dim">height <input id="ch-h" type="number" min="300" max="2000" step="50" value="${saved.H||1300}" style="width:80px;height:32px;background:var(--raised);border:1px solid var(--line2);border-radius:6px;padding:0 8px;color:var(--text);font:inherit">px</label></div>
+    <div class="dim" style="margin-top:8px">views to draw</div><div style="display:flex;gap:6px 14px;flex-wrap:wrap;margin:4px 0">${CHV.map(v=>`<label class="ck"><input type="checkbox" data-v="${v[0]}"${sv.includes(v[0])?' checked':''}> ${v[1]}</label>`).join('')}</div>
+    <div class="dim" style="margin-top:8px">parts</div><div style="display:flex;gap:6px 14px;flex-wrap:wrap;margin:4px 0"><label class="ck"><input type="checkbox" id="ch-arms"${saved.arms===false?'':' checked'}> arms</label><label class="ck"><input type="checkbox" id="ch-legs"${saved.legs===false?'':' checked'}> legs</label><label class="ck"><input type="checkbox" id="ch-tail"${saved.tail?' checked':''}> tail</label></div>
+    <label class="dim" style="display:block;margin-top:8px">extra note for the ai (optional) <input id="ch-note" value="${esc(saved.note||'')}" placeholder="e.g. keep the thick black outline" style="width:100%;height:32px;background:var(--raised);border:1px solid var(--line2);border-radius:6px;padding:0 8px;color:var(--text);font:inherit"></label>
+    <div class="dim" id="ch-count" style="margin-top:10px"></div>
+    <div class="foot"><button class="cancel" id="ch-x">cancel</button><button class="btn-clay" id="ch-go">queue</button></div>`,m=>{
+    const q=s=>$(s,m),opts=()=>({name:(q('#ch-name').value.trim()||'hero').slice(0,20),H:Math.max(300,Math.min(2000,+q('#ch-h').value||1300)),views:$$('[data-v]',m).filter(c=>c.checked).map(c=>c.dataset.v),arms:q('#ch-arms').checked,legs:q('#ch-legs').checked,tail:q('#ch-tail').checked,note:q('#ch-note').value.trim().replace(/[.\s]+$/,'')});
+    const img=q('#ch-img'),showPic=()=>{if(img.dataset.u)URL.revokeObjectURL(img.dataset.u);if(refBlob){img.dataset.u=URL.createObjectURL(refBlob);img.src=img.dataset.u;q('#ch-pm').textContent='this picture will be used'}else{img.removeAttribute('src');q('#ch-pm').textContent='no picture yet'}};
+    const count=()=>{const o=opts(),n=o.views.length?o.views.reduce((s,v)=>s+charParts(v,o).length,0):0;q('#ch-count').textContent=n?`${n} images in ${o.views.length} view${o.views.length>1?'s':''} · each one is one image from your ai credits`:'pick at least one view';q('#ch-go').disabled=!n;q('#ch-go').textContent=n?'queue '+n+' layers':'queue'};
+    showPic();count();
+    m.addEventListener('change',e=>{if(e.target.closest('#ch-file'))return;count()});m.addEventListener('input',e=>{if(e.target.id==='ch-name'||e.target.id==='ch-h')count()});
+    q('#ch-pick').onclick=()=>q('#ch-file').click();
+    q('#ch-file').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(!/^image\//.test(f.type))return toast('that is not a picture','warn');setRef(f);showPic()};
+    q('#ch-x').onclick=closeModal;
+    q('#ch-go').onclick=()=>{
+      if(!refBlob)return toast('attach a picture of the character first','warn');
+      if(!(cfg.provider==='openai'?cfg.openaiKey:cfg.geminiKey).trim()){toast('add your '+cfg.provider+' api key first','warn');return}
+      const o=opts();if(!o.views.length)return;
+      try{localStorage.setItem('lf-char',JSON.stringify(o))}catch(_){}
+      const n=charQueue(o);closeModal();renderJobs();runQueue();toast(`queued ${n} layers · the character's parts appear on the canvas as they finish`,'good');
+    };
+  });
+}
+const MAKEPRE=[
+  {name:'single layer',desc:'type what you want in the box, then generate',icon:'✻',run:()=>$('#make').focus()},
+  {name:'new character from a picture',desc:'front, side, back and ¾ views as separate parts (body, head, arms, legs), ready for animation',icon:'🧍',run:openCharacter},
+  {name:'layer plan (paste json)',desc:'a list of layers made with Claude',icon:'☰',run:openPlan}];
+{
+  const lbl=$('#prompt .lbl'),pop=document.createElement('div');pop.id='presets';pop.hidden=true;document.body.appendChild(pop);
+  pop.innerHTML=MAKEPRE.map((p,i)=>`<button data-pr="${i}"><span class="pi">${p.icon}</span><span><b>${p.name}</b><span class="dim">${p.desc}</span></span></button>`).join('');
+  const close=()=>{pop.hidden=true;lbl.setAttribute('aria-expanded','false')};
+  lbl.addEventListener('click',e=>{e.stopPropagation();if(!pop.hidden)return close();const r=lbl.getBoundingClientRect();pop.style.left=Math.max(8,r.left)+'px';pop.style.bottom=(innerHeight-r.top+10)+'px';pop.hidden=false;lbl.setAttribute('aria-expanded','true')});
+  pop.addEventListener('click',e=>{const b=e.target.closest('[data-pr]');if(!b)return;close();MAKEPRE[+b.dataset.pr].run()});
+  addEventListener('click',e=>{if(!pop.hidden&&!pop.contains(e.target))close()});addEventListener('keydown',e=>{if(e.key==='Escape')close()});
+}
+
 
 /* ---------- generation box (move / resize / turn it, then the ai paints into it) ---------- */
 let gb=null; // {cx,cy,w,h,rot} in scene pixels
@@ -1216,7 +1291,7 @@ async function getRefs(j){
   const m=j.ref||'scene',out=[];
   if(m==='scene'||m==='both'){const b=await flattenScene(1024);if(b)out.push(b)}
   if(m==='layer'||m==='layerref'){const b=await flattenScene(1024,j.layerId);if(b)out.push(b)}
-  if(m==='ref'&&j.box&&refBlob){const b=await cropRef(j.box);if(b){out.push(b);j.refCrop=true;return out}}
+  if(m==='ref'&&j.box&&refBlob&&!j.refWhole){const b=await cropRef(j.box);if(b){out.push(b);j.refCrop=true;return out}}
   if((m==='ref'||m==='both'||m==='layerref')&&refBlob)out.push(await shrinkBlob(refBlob,1280));
   return out;
 }
@@ -1282,6 +1357,7 @@ function findImage(o){
   return best;
 }
 function composePrompt(j,n,green){
+  if(j.char)return charPrompt(j,n,green);
   return composePrompt0(j,n,green)+(j.box?` Compose it to fill the whole frame, which is ${j.box.w>j.box.h*1.15?'wide':j.box.h>j.box.w*1.15?'tall':'square'}: the element upright, as large as the frame allows with only a small margin, nothing cropped.`:'');
 }
 function composePrompt0(j,n,green){
@@ -1367,10 +1443,13 @@ async function runJob(j){
   }
   j.out=id;
   if(j.plan&&j.plan.parent){const pj=jobs.find(x=>x.plan&&x.plan.id===j.plan.id&&x.plan.key===j.plan.parent),pl=pj&&state.layers.find(l=>l.id===pj.out);if(pl&&!pl.par)L.par=pl.id}
+  if(j.plan&&j.plan.role&&ANROLES.some(q=>q[0]===j.plan.role))L.role=j.plan.role;
   pushUndo();lastKey=null;
   let pos=j.pos||'auto';if(pos==='auto')pos=j.kind==='background'?'bottom':'above';
   let i=state.layers.findIndex(l=>l.id===j.afterId);if(i<0&&(pos==='above'||pos==='below'))pos='top';
-  const at=pos==='top'?state.layers.length:pos==='bottom'?0:pos==='below'?i:i+1;state.layers.splice(at,0,L);state.sel=id;
+  let at=pos==='top'?state.layers.length:pos==='bottom'?0:pos==='below'?i:i+1;
+  if(j.plan&&j.plan.behind&&L.par){const pi=state.layers.findIndex(l=>l.id===L.par);if(pi>=0)at=pi}
+  state.layers.splice(at,0,L);state.sel=id;
   j.status='done';changed();renderJobs();
   if(res.needsWand){
     let ok=false;try{ok=await autoWandLayer(id)}catch(e){console.error(e)}
@@ -4174,7 +4253,7 @@ function animExportEntries(list){
   if(!list.some(l=>l.anim))return[];const enc=new TextEncoder();
   return[{name:'anim.js',data:enc.encode(ANIM_RUNTIME())},{name:'ANIM-README.md',data:enc.encode(ANIM_README)}];
 }
-window.__lf={vs,vecOk,vecBool,vecSvg,vecImportSvg,vsvgPath,vecClean,vecNewLayer,vecBegin,vecCommit,vecDirty,vecFlush,vecSetMode,vecDown,vecMove,vecUp,vecDelete,vecToggleSmooth,vecAddNodeBtn,vgeom,get vd(){return vd},anCopyClip,ans,ENGA,animOpen,animClose,rigMotions,rigApply,rigRoll,anGuess,anPivots,animCleanAll,anRefresh,animFrameNow,sfxRoll,sfxMutate,sfxClean,fxAudio,fxs,fxRoll,fxMutate,fxOpen,fxClose,fxAddLayer,fxUpdateLayer,fxPlay,fxPlaying,fxOk,fxPoster,FXE,FXR,fxClean,fxExportEntries,fxLoad,shapeCreate,shapeLive,shapeCommit,shapeOk,renderShape,get sdrag(){return sdrag},cornersFlat,autoWandLayer,autoBgSel,planParse,openPlan,finishPlans,cropRef,syncChildren,tcache,finishPick,startPick,detachLayer,get pickPar(){return pickPar},dupLayer,makeVariants,feelPreview,feelApply,feelCancel,get fs(){return fs},get gb(){return gb},set gb(v){gb=v;gbBtn();draw()},gbToggle,gbHit,gbPts,enqueueUpscale,flattenScene,mergeLayers,selIds,msel,rdCut,get rd(){return rd},rdPaint,enqueueRedraw,getRefs,composePrompt,setRef,getRefs,cutRegion,get cs(){return cs},applyCut,state,store,view,brush,applyWand,cfg,jobs,enqueue,setTool,addBlank,importFiles,saveZip,zipBuild,zipRead,edit,undo,redo,fit}; // handy for debugging
+window.__lf={charQueue,charParts,charPrompt,CHV,openCharacter,MAKEPRE,vs,vecOk,vecBool,vecSvg,vecImportSvg,vsvgPath,vecClean,vecNewLayer,vecBegin,vecCommit,vecDirty,vecFlush,vecSetMode,vecDown,vecMove,vecUp,vecDelete,vecToggleSmooth,vecAddNodeBtn,vgeom,get vd(){return vd},anCopyClip,ans,ENGA,animOpen,animClose,rigMotions,rigApply,rigRoll,anGuess,anPivots,animCleanAll,anRefresh,animFrameNow,sfxRoll,sfxMutate,sfxClean,fxAudio,fxs,fxRoll,fxMutate,fxOpen,fxClose,fxAddLayer,fxUpdateLayer,fxPlay,fxPlaying,fxOk,fxPoster,FXE,FXR,fxClean,fxExportEntries,fxLoad,shapeCreate,shapeLive,shapeCommit,shapeOk,renderShape,get sdrag(){return sdrag},cornersFlat,autoWandLayer,autoBgSel,planParse,openPlan,finishPlans,cropRef,syncChildren,tcache,finishPick,startPick,detachLayer,get pickPar(){return pickPar},dupLayer,makeVariants,feelPreview,feelApply,feelCancel,get fs(){return fs},get gb(){return gb},set gb(v){gb=v;gbBtn();draw()},gbToggle,gbHit,gbPts,enqueueUpscale,flattenScene,mergeLayers,selIds,msel,rdCut,get rd(){return rd},rdPaint,enqueueRedraw,getRefs,composePrompt,setRef,getRefs,cutRegion,get cs(){return cs},applyCut,state,store,view,brush,applyWand,cfg,jobs,enqueue,setTool,addBlank,importFiles,saveZip,zipBuild,zipRead,edit,undo,redo,fit}; // handy for debugging
 (async()=>{
   $('#sname').value=state.name;$('#sname').style.width='10ch';
   if(innerWidth<1000)document.body.classList.add('noside');
