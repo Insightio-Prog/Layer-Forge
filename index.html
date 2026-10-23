@@ -98,6 +98,9 @@ body.noside #side{display:none}
 .fxact{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 @media (max-width:900px){#fxp.show{grid-template-columns:1fr;grid-template-rows:42% 1fr}#fxv{border-right:0;border-bottom:1px solid var(--line)}}
 #sbar{position:absolute;left:14px;top:14px;display:none;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:6px 14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:48px;max-width:calc(100% - 28px)}
+#vbar{position:absolute;left:14px;top:14px;display:none;flex-direction:column;gap:8px;padding:8px 14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;max-width:calc(100% - 28px);z-index:3}
+#vbar.show{display:flex}#vbar .vrow{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}#vbar .vrow .sm{min-height:34px}#vbar .vgrp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}#vbar .vgrp>.dim{font-size:11px}
+#vbar [hidden]{display:none!important}#vbar .tb-l input[type=number]{width:60px}#vbar .vb{min-width:38px;border:1px solid var(--line);border-radius:6px}#vbar .vb:disabled{opacity:.35}
 #sbar.show{display:flex}.stypes{display:flex;gap:6px}.stypes .sm{min-width:40px;height:36px;border:1px solid var(--line);border-radius:6px;font-size:16px}.stypes .sm.on{border-color:var(--clay);color:var(--clay-text)}
 .insp .shbox{display:grid;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--line)}.insp select.shsel{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px;padding:4px 6px}.insp .shw{width:64px;min-width:0;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;font:inherit;padding:6px}
 #cbar{position:absolute;left:14px;top:14px;display:none;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:6px 14px;background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:48px;max-width:calc(100% - 28px)}
@@ -264,6 +267,7 @@ select option:checked,select option:hover{background:#3a2a22;color:#e9a98f}
     <button class="tool" data-tool="wand" data-ic="wand" title="remove background (w)" aria-label="remove background"></button>
     <button class="tool" data-tool="redraw" data-ic="lasso" title="redraw (r) - draw a selection on a layer and have the ai repaint just that part" aria-label="redraw selection"></button>
     <button class="tool" data-tool="shape" data-ic="shape" title="shapes (s) - draw a circle, square, hexagon or star in a colour; blur and glow can be added and changed any time" aria-label="shapes"></button>
+    <button class="tool" data-tool="vector" data-ic="pen" title="vector (p) - pen, pencil and shapes made of editable nodes; combine shapes with union, subtract, intersect; import and export svg" aria-label="vector"></button>
     <button class="tool" data-tool="hand" data-ic="hand" title="hand - pan (h, or hold space)" aria-label="hand"></button>
     <button class="tool" data-tool="zoom" data-ic="zoom" title="zoom (z) - click in, shift-click out" aria-label="zoom"></button>
   </aside>
@@ -276,6 +280,21 @@ select option:checked,select option:hover{background:#3a2a22;color:#e9a98f}
       <span class="stypes" id="stypes"><button class="sm on" data-st="circle" title="circle / oval">●</button><button class="sm" data-st="square" title="square / rectangle">■</button><button class="sm" data-st="hexagon" title="hexagon">⬢</button><button class="sm" data-st="star" title="star">★</button></span>
       <label class="tb-l">fill<input type="color" id="scol" value="#D97757" aria-label="shape colour"></label>
       <span class="dim">drag on the picture to draw · shift keeps it even · click for a default size</span></div>
+    <div id="vbar"><div class="vrow"><span class="tb-t">vector</span>
+      <span class="stypes" id="vmodes"><button class="sm on" data-vm="select" title="select and edit (a) - tap a shape, drag its nodes or handles. double-tap a node to smooth or sharpen it, double-tap an edge to add a node. shift-tap adds to the selection">↖</button><button class="sm" data-vm="pen" title="pen (p) - tap for a corner, drag for a curve, tap the first node to close, ↵ to finish">✒</button><button class="sm" data-vm="pencil" title="pencil (n) - draw freehand; it is smoothed into curves">✎</button><button class="sm" data-vm="line" title="line (l)">╱</button><button class="sm" data-vm="rect" title="rectangle (m) - shift keeps it square">■</button><button class="sm" data-vm="ellipse" title="ellipse (o) - shift keeps it round">●</button><button class="sm" data-vm="poly" title="polygon">⬠</button><button class="sm" data-vm="star" title="star">★</button></span>
+      <label class="tb-l" id="vn-w" hidden>sides<input type="number" id="vn" min="3" max="24" value="6" aria-label="polygon sides"></label>
+      <label class="tb-l" id="vp-w" hidden>points<input type="number" id="vp" min="3" max="24" value="5" aria-label="star points"></label>
+      <label class="tb-l" id="vi-w" hidden>depth %<input type="number" id="vi" min="5" max="95" value="50" aria-label="star depth"></label>
+      <label class="tb-l" id="vr-w" hidden>corners %<input type="number" id="vr" min="0" max="100" value="0" aria-label="rounded corners"></label>
+      <span class="dim" id="vinfo"></span></div>
+    <div class="vrow"><span class="vgrp"><label class="tb-l ck"><input type="checkbox" id="vfillon" checked> fill</label><input type="color" id="vfill" value="#D97757" aria-label="fill colour"><label class="tb-l ck" title="blend from the fill colour to a second colour"><input type="checkbox" id="vgrad"> gradient</label><span id="vgwrap" class="vgrp" hidden><input type="color" id="vfill2" value="#7A3E2B" aria-label="second colour"><input type="number" id="vgang" min="-360" max="360" value="90" aria-label="gradient angle" title="angle: 0 = left to right, 90 = top to bottom" style="width:60px"></span></span>
+      <span class="vgrp"><label class="tb-l ck"><input type="checkbox" id="vstrokeon"> outline</label><input type="color" id="vstroke" value="#E8E6DC" aria-label="outline colour"><input type="number" id="vsw" min="0" max="500" step="1" value="8" aria-label="outline width" style="width:60px" title="outline width"></span></div>
+    <div class="vrow"><span class="vgrp"><span class="dim">combine</span><button class="sm vb" data-vb="union" title="union - merge the selected shapes into one">∪</button><button class="sm vb" data-vb="subtract" title="subtract - cut the shapes on top out of the bottom one">−</button><button class="sm vb" data-vb="intersect" title="intersect - keep only where they overlap">∩</button><button class="sm vb" data-vb="exclude" title="exclude - keep everything except where they overlap">⊻</button></span>
+      <span class="vgrp"><span class="dim">node</span><button class="sm vb" data-vb="addnode" title="add a node (halfway along the segment after the selected node)">＋</button><button class="sm vb" data-vb="delnode" title="delete the selected node">−</button><button class="sm vb" data-vb="smooth" title="make the selected node smooth">⌒</button><button class="sm vb" data-vb="sharp" title="make the selected node a sharp corner">⌐</button><button class="sm vb" data-vb="close" title="close or open the path">⭘</button></span>
+      <span class="vgrp"><span class="dim">shape</span><button class="sm vb" data-vb="up" title="bring forward">▲</button><button class="sm vb" data-vb="down" title="send back">▼</button><button class="sm vb" data-vb="dup" title="duplicate">⧉</button><button class="sm vb" data-vb="del" title="delete the selected shape (or node)">🗑</button></span>
+      <span class="vgrp"><button class="sm vb" data-vb="svgin" title="bring in an svg file as a vector layer">svg ⤒</button><button class="sm vb" data-vb="svgout" title="save the selected vector layer as an svg">svg ⤓</button></span></div>
+    </div>
+    <input type="file" id="svgfile" accept=".svg,image/svg+xml" multiple hidden>
     <div id="tbar"><span id="tbar-t">brush</span><label class="tb-l">size<input type="range" id="bsize" min="1" max="300" value="12" aria-label="brush size"><span id="bsz">12px</span></label><label class="tb-l">colour<input type="color" id="bcol" value="#8c7b6b" aria-label="brush colour"></label></div>
     <div id="wbar"><span class="tb-t">remove background</span>
       <label class="tb-l">colour <button id="wcol" class="sw" title="click the picture to pick the background colour" aria-label="background colour"></button></label>
@@ -342,11 +361,38 @@ select option:checked,select option:hover{background:#3a2a22;color:#e9a98f}
   <div id="status"><span class="dot">●</span><span id="st-l">idle</span><span class="r" id="st-r"></span></div>
 </div>
 
-<input type="file" id="file" accept="image/png,image/*,.png,.zip,application/zip" multiple hidden>
+<input type="file" id="file" accept="image/png,image/*,.png,.svg,.zip,application/zip" multiple hidden>
 <div id="modal" role="dialog" aria-modal="true"></div>
 <div id="toast" role="status"></div>
 <div id="drop"><div>drop png layers or a scene zip</div></div>
 
+<script>/* polygon-clipping (MIT) - used by the vector combine tool */
+!function(t,e){"object"==typeof exports&&"undefined"!=typeof module?module.exports=e():"function"==typeof define&&define.amd?define(e):(t="undefined"!=typeof globalThis?globalThis:t||self).polygonClipping=e()}(this,(function(){"use strict";
+/**
+     * splaytree v3.1.2
+     * Fast Splay tree for Node and browser
+     *
+     * @author Alexander Milevski <info@w8r.name>
+     * @license MIT
+     * @preserve
+     */
+/*! *****************************************************************************
+    Copyright (c) Microsoft Corporation. All rights reserved.
+    Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+    this file except in compliance with the License. You may obtain a copy of the
+    License at http://www.apache.org/licenses/LICENSE-2.0
+
+    THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
+    WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE,
+    MERCHANTABLITY OR NON-INFRINGEMENT.
+
+    See the Apache Version 2.0 License for specific language governing permissions
+    and limitations under the License.
+    ***************************************************************************** */function t(t,e){var n,r,i,o,s={label:0,sent:function(){if(1&i[0])throw i[1];return i[1]},trys:[],ops:[]};return o={next:l(0),throw:l(1),return:l(2)},"function"==typeof Symbol&&(o[Symbol.iterator]=function(){return this}),o;function l(o){return function(l){return function(o){if(n)throw new TypeError("Generator is already executing.");for(;s;)try{if(n=1,r&&(i=2&o[0]?r.return:o[0]?r.throw||((i=r.return)&&i.call(r),0):r.next)&&!(i=i.call(r,o[1])).done)return i;switch(r=0,i&&(o=[2&o[0],i.value]),o[0]){case 0:case 1:i=o;break;case 4:return s.label++,{value:o[1],done:!1};case 5:s.label++,r=o[1],o=[0];continue;case 7:o=s.ops.pop(),s.trys.pop();continue;default:if(!(i=s.trys,(i=i.length>0&&i[i.length-1])||6!==o[0]&&2!==o[0])){s=0;continue}if(3===o[0]&&(!i||o[1]>i[0]&&o[1]<i[3])){s.label=o[1];break}if(6===o[0]&&s.label<i[1]){s.label=i[1],i=o;break}if(i&&s.label<i[2]){s.label=i[2],s.ops.push(o);break}i[2]&&s.ops.pop(),s.trys.pop();continue}o=e.call(t,s)}catch(t){o=[6,t],r=0}finally{n=i=0}if(5&o[0])throw o[1];return{value:o[0]?o[1]:void 0,done:!0}}([o,l])}}}var e=function(t,e){this.next=null,this.key=t,this.data=e,this.left=null,this.right=null};function n(t,e){return t>e?1:t<e?-1:0}function r(t,n,r){for(var i=new e(null,null),o=i,s=i;;){var l=r(t,n.key);if(l<0){if(null===n.left)break;if(r(t,n.left.key)<0){var h=n.left;if(n.left=h.right,h.right=n,null===(n=h).left)break}s.left=n,s=n,n=n.left}else{if(!(l>0))break;if(null===n.right)break;if(r(t,n.right.key)>0){h=n.right;if(n.right=h.left,h.left=n,null===(n=h).right)break}o.right=n,o=n,n=n.right}}return o.right=n.left,s.left=n.right,n.left=i.right,n.right=i.left,n}function i(t,n,i,o){var s=new e(t,n);if(null===i)return s.left=s.right=null,s;var l=o(t,(i=r(t,i,o)).key);return l<0?(s.left=i.left,s.right=i,i.left=null):l>=0&&(s.right=i.right,s.left=i,i.right=null),s}function o(t,e,n){var i=null,o=null;if(e){var s=n((e=r(t,e,n)).key,t);0===s?(i=e.left,o=e.right):s<0?(o=e.right,e.right=null,i=e):(i=e.left,e.left=null,o=e)}return{left:i,right:o}}function s(t,e,n,r,i){if(t){r(e+(n?"└── ":"├── ")+i(t)+"\n");var o=e+(n?"    ":"│   ");t.left&&s(t.left,o,!1,r,i),t.right&&s(t.right,o,!0,r,i)}}var l=function(){function l(t){void 0===t&&(t=n),this._root=null,this._size=0,this._comparator=t}return l.prototype.insert=function(t,e){return this._size++,this._root=i(t,e,this._root,this._comparator)},l.prototype.add=function(t,n){var i=new e(t,n);null===this._root&&(i.left=i.right=null,this._size++,this._root=i);var o=this._comparator,s=r(t,this._root,o),l=o(t,s.key);return 0===l?this._root=s:(l<0?(i.left=s.left,i.right=s,s.left=null):l>0&&(i.right=s.right,i.left=s,s.right=null),this._size++,this._root=i),this._root},l.prototype.remove=function(t){this._root=this._remove(t,this._root,this._comparator)},l.prototype._remove=function(t,e,n){var i;return null===e?null:0===n(t,(e=r(t,e,n)).key)?(null===e.left?i=e.right:(i=r(t,e.left,n)).right=e.right,this._size--,i):e},l.prototype.pop=function(){var t=this._root;if(t){for(;t.left;)t=t.left;return this._root=r(t.key,this._root,this._comparator),this._root=this._remove(t.key,this._root,this._comparator),{key:t.key,data:t.data}}return null},l.prototype.findStatic=function(t){for(var e=this._root,n=this._comparator;e;){var r=n(t,e.key);if(0===r)return e;e=r<0?e.left:e.right}return null},l.prototype.find=function(t){return this._root&&(this._root=r(t,this._root,this._comparator),0!==this._comparator(t,this._root.key))?null:this._root},l.prototype.contains=function(t){for(var e=this._root,n=this._comparator;e;){var r=n(t,e.key);if(0===r)return!0;e=r<0?e.left:e.right}return!1},l.prototype.forEach=function(t,e){for(var n=this._root,r=[],i=!1;!i;)null!==n?(r.push(n),n=n.left):0!==r.length?(n=r.pop(),t.call(e,n),n=n.right):i=!0;return this},l.prototype.range=function(t,e,n,r){for(var i=[],o=this._comparator,s=this._root;0!==i.length||s;)if(s)i.push(s),s=s.left;else{if(o((s=i.pop()).key,e)>0)break;if(o(s.key,t)>=0&&n.call(r,s))return this;s=s.right}return this},l.prototype.keys=function(){var t=[];return this.forEach((function(e){var n=e.key;return t.push(n)})),t},l.prototype.values=function(){var t=[];return this.forEach((function(e){var n=e.data;return t.push(n)})),t},l.prototype.min=function(){return this._root?this.minNode(this._root).key:null},l.prototype.max=function(){return this._root?this.maxNode(this._root).key:null},l.prototype.minNode=function(t){if(void 0===t&&(t=this._root),t)for(;t.left;)t=t.left;return t},l.prototype.maxNode=function(t){if(void 0===t&&(t=this._root),t)for(;t.right;)t=t.right;return t},l.prototype.at=function(t){for(var e=this._root,n=!1,r=0,i=[];!n;)if(e)i.push(e),e=e.left;else if(i.length>0){if(e=i.pop(),r===t)return e;r++,e=e.right}else n=!0;return null},l.prototype.next=function(t){var e=this._root,n=null;if(t.right){for(n=t.right;n.left;)n=n.left;return n}for(var r=this._comparator;e;){var i=r(t.key,e.key);if(0===i)break;i<0?(n=e,e=e.left):e=e.right}return n},l.prototype.prev=function(t){var e=this._root,n=null;if(null!==t.left){for(n=t.left;n.right;)n=n.right;return n}for(var r=this._comparator;e;){var i=r(t.key,e.key);if(0===i)break;i<0?e=e.left:(n=e,e=e.right)}return n},l.prototype.clear=function(){return this._root=null,this._size=0,this},l.prototype.toList=function(){return function(t){var n=t,r=[],i=!1,o=new e(null,null),s=o;for(;!i;)n?(r.push(n),n=n.left):r.length>0?n=(n=s=s.next=r.pop()).right:i=!0;return s.next=null,o.next}(this._root)},l.prototype.load=function(t,n,r){void 0===n&&(n=[]),void 0===r&&(r=!1);var i=t.length,o=this._comparator;if(r&&f(t,n,0,i-1,o),null===this._root)this._root=h(t,n,0,i),this._size=i;else{var s=function(t,n,r){var i=new e(null,null),o=i,s=t,l=n;for(;null!==s&&null!==l;)r(s.key,l.key)<0?(o.next=s,s=s.next):(o.next=l,l=l.next),o=o.next;null!==s?o.next=s:null!==l&&(o.next=l);return i.next}(this.toList(),function(t,n){for(var r=new e(null,null),i=r,o=0;o<t.length;o++)i=i.next=new e(t[o],n[o]);return i.next=null,r.next}(t,n),o);i=this._size+i,this._root=u({head:s},0,i)}return this},l.prototype.isEmpty=function(){return null===this._root},Object.defineProperty(l.prototype,"size",{get:function(){return this._size},enumerable:!0,configurable:!0}),Object.defineProperty(l.prototype,"root",{get:function(){return this._root},enumerable:!0,configurable:!0}),l.prototype.toString=function(t){void 0===t&&(t=function(t){return String(t.key)});var e=[];return s(this._root,"",!0,(function(t){return e.push(t)}),t),e.join("")},l.prototype.update=function(t,e,n){var s=this._comparator,l=o(t,this._root,s),h=l.left,u=l.right;s(t,e)<0?u=i(e,n,u,s):h=i(e,n,h,s),this._root=function(t,e,n){return null===e?t:(null===t||((e=r(t.key,e,n)).left=t),e)}(h,u,s)},l.prototype.split=function(t){return o(t,this._root,this._comparator)},l.prototype[Symbol.iterator]=function(){var e,n,r;return t(this,(function(t){switch(t.label){case 0:e=this._root,n=[],r=!1,t.label=1;case 1:return r?[3,6]:null===e?[3,2]:(n.push(e),e=e.left,[3,5]);case 2:return 0===n.length?[3,4]:[4,e=n.pop()];case 3:return t.sent(),e=e.right,[3,5];case 4:r=!0,t.label=5;case 5:return[3,1];case 6:return[2]}}))},l}();function h(t,n,r,i){var o=i-r;if(o>0){var s=r+Math.floor(o/2),l=t[s],u=n[s],f=new e(l,u);return f.left=h(t,n,r,s),f.right=h(t,n,s+1,i),f}return null}function u(t,e,n){var r=n-e;if(r>0){var i=e+Math.floor(r/2),o=u(t,e,i),s=t.head;return s.left=o,t.head=t.head.next,s.right=u(t,i+1,n),s}return null}function f(t,e,n,r,i){if(!(n>=r)){for(var o=t[n+r>>1],s=n-1,l=r+1;;){do{s++}while(i(t[s],o)<0);do{l--}while(i(t[l],o)>0);if(s>=l)break;var h=t[s];t[s]=t[l],t[l]=h,h=e[s],e[s]=e[l],e[l]=h}f(t,e,n,l,i),f(t,e,l+1,r,i)}}const c=(t,e)=>t.ll.x<=e.x&&e.x<=t.ur.x&&t.ll.y<=e.y&&e.y<=t.ur.y,p=(t,e)=>{if(e.ur.x<t.ll.x||t.ur.x<e.ll.x||e.ur.y<t.ll.y||t.ur.y<e.ll.y)return null;const n=t.ll.x<e.ll.x?e.ll.x:t.ll.x,r=t.ur.x<e.ur.x?t.ur.x:e.ur.x;return{ll:{x:n,y:t.ll.y<e.ll.y?e.ll.y:t.ll.y},ur:{x:r,y:t.ur.y<e.ur.y?t.ur.y:e.ur.y}}};let g=Number.EPSILON;void 0===g&&(g=Math.pow(2,-52));const a=g*g,y=(t,e)=>{if(-g<t&&t<g&&-g<e&&e<g)return 0;const n=t-e;return n*n<a*t*e?0:t<e?-1:1};class x{constructor(){this.tree=new l,this.round(0)}round(t){const e=this.tree.add(t),n=this.tree.prev(e);if(null!==n&&0===y(e.key,n.key))return this.tree.remove(t),n.key;const r=this.tree.next(e);return null!==r&&0===y(e.key,r.key)?(this.tree.remove(t),r.key):t}}const b=new class{constructor(){this.reset()}reset(){this.xRounder=new x,this.yRounder=new x}round(t,e){return{x:this.xRounder.round(t),y:this.yRounder.round(e)}}},v=11102230246251565e-32,d=134217729,m=(3+8*v)*v;function E(t,e,n,r,i){let o,s,l,h,u=e[0],f=r[0],c=0,p=0;f>u==f>-u?(o=u,u=e[++c]):(o=f,f=r[++p]);let g=0;if(c<t&&p<n)for(f>u==f>-u?(s=u+o,l=o-(s-u),u=e[++c]):(s=f+o,l=o-(s-f),f=r[++p]),o=s,0!==l&&(i[g++]=l);c<t&&p<n;)f>u==f>-u?(s=o+u,h=s-o,l=o-(s-h)+(u-h),u=e[++c]):(s=o+f,h=s-o,l=o-(s-h)+(f-h),f=r[++p]),o=s,0!==l&&(i[g++]=l);for(;c<t;)s=o+u,h=s-o,l=o-(s-h)+(u-h),u=e[++c],o=s,0!==l&&(i[g++]=l);for(;p<n;)s=o+f,h=s-o,l=o-(s-h)+(f-h),f=r[++p],o=s,0!==l&&(i[g++]=l);return 0===o&&0!==g||(i[g++]=o),g}function S(t){return new Float64Array(t)}const _=22204460492503146e-32,w=11093356479670487e-47,k=S(4),R=S(8),I=S(12),P=S(16),N=S(4);function A(t,e,n,r,i,o){const s=(e-o)*(n-i),l=(t-i)*(r-o),h=s-l,u=Math.abs(s+l);return Math.abs(h)>=33306690738754716e-32*u?h:-function(t,e,n,r,i,o,s){let l,h,u,f,c,p,g,a,y,x,b,v,S,A,O,L,$,M;const z=t-i,B=n-i,G=e-o,T=r-o;A=z*T,p=d*z,g=p-(p-z),a=z-g,p=d*T,y=p-(p-T),x=T-y,O=a*x-(A-g*y-a*y-g*x),L=G*B,p=d*G,g=p-(p-G),a=G-g,p=d*B,y=p-(p-B),x=B-y,$=a*x-(L-g*y-a*y-g*x),b=O-$,c=O-b,k[0]=O-(b+c)+(c-$),v=A+b,c=v-A,S=A-(v-c)+(b-c),b=S-L,c=S-b,k[1]=S-(b+c)+(c-L),M=v+b,c=M-v,k[2]=v-(M-c)+(b-c),k[3]=M;let q=function(t,e){let n=e[0];for(let r=1;r<t;r++)n+=e[r];return n}(4,k),C=_*s;if(q>=C||-q>=C)return q;if(c=t-z,l=t-(z+c)+(c-i),c=n-B,u=n-(B+c)+(c-i),c=e-G,h=e-(G+c)+(c-o),c=r-T,f=r-(T+c)+(c-o),0===l&&0===h&&0===u&&0===f)return q;if(C=w*s+m*Math.abs(q),q+=z*f+T*l-(G*u+B*h),q>=C||-q>=C)return q;A=l*T,p=d*l,g=p-(p-l),a=l-g,p=d*T,y=p-(p-T),x=T-y,O=a*x-(A-g*y-a*y-g*x),L=h*B,p=d*h,g=p-(p-h),a=h-g,p=d*B,y=p-(p-B),x=B-y,$=a*x-(L-g*y-a*y-g*x),b=O-$,c=O-b,N[0]=O-(b+c)+(c-$),v=A+b,c=v-A,S=A-(v-c)+(b-c),b=S-L,c=S-b,N[1]=S-(b+c)+(c-L),M=v+b,c=M-v,N[2]=v-(M-c)+(b-c),N[3]=M;const F=E(4,k,4,N,R);A=z*f,p=d*z,g=p-(p-z),a=z-g,p=d*f,y=p-(p-f),x=f-y,O=a*x-(A-g*y-a*y-g*x),L=G*u,p=d*G,g=p-(p-G),a=G-g,p=d*u,y=p-(p-u),x=u-y,$=a*x-(L-g*y-a*y-g*x),b=O-$,c=O-b,N[0]=O-(b+c)+(c-$),v=A+b,c=v-A,S=A-(v-c)+(b-c),b=S-L,c=S-b,N[1]=S-(b+c)+(c-L),M=v+b,c=M-v,N[2]=v-(M-c)+(b-c),N[3]=M;const j=E(F,R,4,N,I);A=l*f,p=d*l,g=p-(p-l),a=l-g,p=d*f,y=p-(p-f),x=f-y,O=a*x-(A-g*y-a*y-g*x),L=h*u,p=d*h,g=p-(p-h),a=h-g,p=d*u,y=p-(p-u),x=u-y,$=a*x-(L-g*y-a*y-g*x),b=O-$,c=O-b,N[0]=O-(b+c)+(c-$),v=A+b,c=v-A,S=A-(v-c)+(b-c),b=S-L,c=S-b,N[1]=S-(b+c)+(c-L),M=v+b,c=M-v,N[2]=v-(M-c)+(b-c),N[3]=M;const U=E(j,I,4,N,P);return P[U-1]}(t,e,n,r,i,o,u)}const O=(t,e)=>t.x*e.y-t.y*e.x,L=(t,e)=>t.x*e.x+t.y*e.y,$=(t,e,n)=>{const r=A(t.x,t.y,e.x,e.y,n.x,n.y);return r>0?-1:r<0?1:0},M=t=>Math.sqrt(L(t,t)),z=(t,e,n)=>{const r={x:e.x-t.x,y:e.y-t.y},i={x:n.x-t.x,y:n.y-t.y};return O(i,r)/M(i)/M(r)},B=(t,e,n)=>{const r={x:e.x-t.x,y:e.y-t.y},i={x:n.x-t.x,y:n.y-t.y};return L(i,r)/M(i)/M(r)},G=(t,e,n)=>0===e.y?null:{x:t.x+e.x/e.y*(n-t.y),y:n},T=(t,e,n)=>0===e.x?null:{x:n,y:t.y+e.y/e.x*(n-t.x)};class q{static compare(t,e){const n=q.comparePoints(t.point,e.point);return 0!==n?n:(t.point!==e.point&&t.link(e),t.isLeft!==e.isLeft?t.isLeft?1:-1:F.compare(t.segment,e.segment))}static comparePoints(t,e){return t.x<e.x?-1:t.x>e.x?1:t.y<e.y?-1:t.y>e.y?1:0}constructor(t,e){void 0===t.events?t.events=[this]:t.events.push(this),this.point=t,this.isLeft=e}link(t){if(t.point===this.point)throw new Error("Tried to link already linked events");const e=t.point.events;for(let t=0,n=e.length;t<n;t++){const n=e[t];this.point.events.push(n),n.point=this.point}this.checkForConsuming()}checkForConsuming(){const t=this.point.events.length;for(let e=0;e<t;e++){const n=this.point.events[e];if(void 0===n.segment.consumedBy)for(let r=e+1;r<t;r++){const t=this.point.events[r];void 0===t.consumedBy&&(n.otherSE.point.events===t.otherSE.point.events&&n.segment.consume(t.segment))}}}getAvailableLinkedEvents(){const t=[];for(let e=0,n=this.point.events.length;e<n;e++){const n=this.point.events[e];n!==this&&!n.segment.ringOut&&n.segment.isInResult()&&t.push(n)}return t}getLeftmostComparator(t){const e=new Map,n=n=>{const r=n.otherSE;e.set(n,{sine:z(this.point,t.point,r.point),cosine:B(this.point,t.point,r.point)})};return(t,r)=>{e.has(t)||n(t),e.has(r)||n(r);const{sine:i,cosine:o}=e.get(t),{sine:s,cosine:l}=e.get(r);return i>=0&&s>=0?o<l?1:o>l?-1:0:i<0&&s<0?o<l?-1:o>l?1:0:s<i?-1:s>i?1:0}}}let C=0;class F{static compare(t,e){const n=t.leftSE.point.x,r=e.leftSE.point.x,i=t.rightSE.point.x,o=e.rightSE.point.x;if(o<n)return 1;if(i<r)return-1;const s=t.leftSE.point.y,l=e.leftSE.point.y,h=t.rightSE.point.y,u=e.rightSE.point.y;if(n<r){if(l<s&&l<h)return 1;if(l>s&&l>h)return-1;const n=t.comparePoint(e.leftSE.point);if(n<0)return 1;if(n>0)return-1;const r=e.comparePoint(t.rightSE.point);return 0!==r?r:-1}if(n>r){if(s<l&&s<u)return-1;if(s>l&&s>u)return 1;const n=e.comparePoint(t.leftSE.point);if(0!==n)return n;const r=t.comparePoint(e.rightSE.point);return r<0?1:r>0?-1:1}if(s<l)return-1;if(s>l)return 1;if(i<o){const n=e.comparePoint(t.rightSE.point);if(0!==n)return n}if(i>o){const n=t.comparePoint(e.rightSE.point);if(n<0)return 1;if(n>0)return-1}if(i!==o){const t=h-s,e=i-n,f=u-l,c=o-r;if(t>e&&f<c)return 1;if(t<e&&f>c)return-1}return i>o?1:i<o||h<u?-1:h>u?1:t.id<e.id?-1:t.id>e.id?1:0}constructor(t,e,n,r){this.id=++C,this.leftSE=t,t.segment=this,t.otherSE=e,this.rightSE=e,e.segment=this,e.otherSE=t,this.rings=n,this.windings=r}static fromRing(t,e,n){let r,i,o;const s=q.comparePoints(t,e);if(s<0)r=t,i=e,o=1;else{if(!(s>0))throw new Error(`Tried to create degenerate segment at [${t.x}, ${t.y}]`);r=e,i=t,o=-1}const l=new q(r,!0),h=new q(i,!1);return new F(l,h,[n],[o])}replaceRightSE(t){this.rightSE=t,this.rightSE.segment=this,this.rightSE.otherSE=this.leftSE,this.leftSE.otherSE=this.rightSE}bbox(){const t=this.leftSE.point.y,e=this.rightSE.point.y;return{ll:{x:this.leftSE.point.x,y:t<e?t:e},ur:{x:this.rightSE.point.x,y:t>e?t:e}}}vector(){return{x:this.rightSE.point.x-this.leftSE.point.x,y:this.rightSE.point.y-this.leftSE.point.y}}isAnEndpoint(t){return t.x===this.leftSE.point.x&&t.y===this.leftSE.point.y||t.x===this.rightSE.point.x&&t.y===this.rightSE.point.y}comparePoint(t){if(this.isAnEndpoint(t))return 0;const e=this.leftSE.point,n=this.rightSE.point,r=this.vector();if(e.x===n.x)return t.x===e.x?0:t.x<e.x?1:-1;const i=(t.y-e.y)/r.y,o=e.x+i*r.x;if(t.x===o)return 0;const s=(t.x-e.x)/r.x,l=e.y+s*r.y;return t.y===l?0:t.y<l?-1:1}getIntersection(t){const e=this.bbox(),n=t.bbox(),r=p(e,n);if(null===r)return null;const i=this.leftSE.point,o=this.rightSE.point,s=t.leftSE.point,l=t.rightSE.point,h=c(e,s)&&0===this.comparePoint(s),u=c(n,i)&&0===t.comparePoint(i),f=c(e,l)&&0===this.comparePoint(l),g=c(n,o)&&0===t.comparePoint(o);if(u&&h)return g&&!f?o:!g&&f?l:null;if(u)return f&&i.x===l.x&&i.y===l.y?null:i;if(h)return g&&o.x===s.x&&o.y===s.y?null:s;if(g&&f)return null;if(g)return o;if(f)return l;const a=((t,e,n,r)=>{if(0===e.x)return T(n,r,t.x);if(0===r.x)return T(t,e,n.x);if(0===e.y)return G(n,r,t.y);if(0===r.y)return G(t,e,n.y);const i=O(e,r);if(0==i)return null;const o={x:n.x-t.x,y:n.y-t.y},s=O(o,e)/i,l=O(o,r)/i;return{x:(t.x+l*e.x+(n.x+s*r.x))/2,y:(t.y+l*e.y+(n.y+s*r.y))/2}})(i,this.vector(),s,t.vector());return null===a?null:c(r,a)?b.round(a.x,a.y):null}split(t){const e=[],n=void 0!==t.events,r=new q(t,!0),i=new q(t,!1),o=this.rightSE;this.replaceRightSE(i),e.push(i),e.push(r);const s=new F(r,o,this.rings.slice(),this.windings.slice());return q.comparePoints(s.leftSE.point,s.rightSE.point)>0&&s.swapEvents(),q.comparePoints(this.leftSE.point,this.rightSE.point)>0&&this.swapEvents(),n&&(r.checkForConsuming(),i.checkForConsuming()),e}swapEvents(){const t=this.rightSE;this.rightSE=this.leftSE,this.leftSE=t,this.leftSE.isLeft=!0,this.rightSE.isLeft=!1;for(let t=0,e=this.windings.length;t<e;t++)this.windings[t]*=-1}consume(t){let e=this,n=t;for(;e.consumedBy;)e=e.consumedBy;for(;n.consumedBy;)n=n.consumedBy;const r=F.compare(e,n);if(0!==r){if(r>0){const t=e;e=n,n=t}if(e.prev===n){const t=e;e=n,n=t}for(let t=0,r=n.rings.length;t<r;t++){const r=n.rings[t],i=n.windings[t],o=e.rings.indexOf(r);-1===o?(e.rings.push(r),e.windings.push(i)):e.windings[o]+=i}n.rings=null,n.windings=null,n.consumedBy=e,n.leftSE.consumedBy=e.leftSE,n.rightSE.consumedBy=e.rightSE}}prevInResult(){return void 0!==this._prevInResult||(this.prev?this.prev.isInResult()?this._prevInResult=this.prev:this._prevInResult=this.prev.prevInResult():this._prevInResult=null),this._prevInResult}beforeState(){if(void 0!==this._beforeState)return this._beforeState;if(this.prev){const t=this.prev.consumedBy||this.prev;this._beforeState=t.afterState()}else this._beforeState={rings:[],windings:[],multiPolys:[]};return this._beforeState}afterState(){if(void 0!==this._afterState)return this._afterState;const t=this.beforeState();this._afterState={rings:t.rings.slice(0),windings:t.windings.slice(0),multiPolys:[]};const e=this._afterState.rings,n=this._afterState.windings,r=this._afterState.multiPolys;for(let t=0,r=this.rings.length;t<r;t++){const r=this.rings[t],i=this.windings[t],o=e.indexOf(r);-1===o?(e.push(r),n.push(i)):n[o]+=i}const i=[],o=[];for(let t=0,r=e.length;t<r;t++){if(0===n[t])continue;const r=e[t],s=r.poly;if(-1===o.indexOf(s))if(r.isExterior)i.push(s);else{-1===o.indexOf(s)&&o.push(s);const t=i.indexOf(r.poly);-1!==t&&i.splice(t,1)}}for(let t=0,e=i.length;t<e;t++){const e=i[t].multiPoly;-1===r.indexOf(e)&&r.push(e)}return this._afterState}isInResult(){if(this.consumedBy)return!1;if(void 0!==this._isInResult)return this._isInResult;const t=this.beforeState().multiPolys,e=this.afterState().multiPolys;switch(H.type){case"union":{const n=0===t.length,r=0===e.length;this._isInResult=n!==r;break}case"intersection":{let n,r;t.length<e.length?(n=t.length,r=e.length):(n=e.length,r=t.length),this._isInResult=r===H.numMultiPolys&&n<r;break}case"xor":{const n=Math.abs(t.length-e.length);this._isInResult=n%2==1;break}case"difference":{const n=t=>1===t.length&&t[0].isSubject;this._isInResult=n(t)!==n(e);break}default:throw new Error(`Unrecognized operation type found ${H.type}`)}return this._isInResult}}class j{constructor(t,e,n){if(!Array.isArray(t)||0===t.length)throw new Error("Input geometry is not a valid Polygon or MultiPolygon");if(this.poly=e,this.isExterior=n,this.segments=[],"number"!=typeof t[0][0]||"number"!=typeof t[0][1])throw new Error("Input geometry is not a valid Polygon or MultiPolygon");const r=b.round(t[0][0],t[0][1]);this.bbox={ll:{x:r.x,y:r.y},ur:{x:r.x,y:r.y}};let i=r;for(let e=1,n=t.length;e<n;e++){if("number"!=typeof t[e][0]||"number"!=typeof t[e][1])throw new Error("Input geometry is not a valid Polygon or MultiPolygon");let n=b.round(t[e][0],t[e][1]);n.x===i.x&&n.y===i.y||(this.segments.push(F.fromRing(i,n,this)),n.x<this.bbox.ll.x&&(this.bbox.ll.x=n.x),n.y<this.bbox.ll.y&&(this.bbox.ll.y=n.y),n.x>this.bbox.ur.x&&(this.bbox.ur.x=n.x),n.y>this.bbox.ur.y&&(this.bbox.ur.y=n.y),i=n)}r.x===i.x&&r.y===i.y||this.segments.push(F.fromRing(i,r,this))}getSweepEvents(){const t=[];for(let e=0,n=this.segments.length;e<n;e++){const n=this.segments[e];t.push(n.leftSE),t.push(n.rightSE)}return t}}class U{constructor(t,e){if(!Array.isArray(t))throw new Error("Input geometry is not a valid Polygon or MultiPolygon");this.exteriorRing=new j(t[0],this,!0),this.bbox={ll:{x:this.exteriorRing.bbox.ll.x,y:this.exteriorRing.bbox.ll.y},ur:{x:this.exteriorRing.bbox.ur.x,y:this.exteriorRing.bbox.ur.y}},this.interiorRings=[];for(let e=1,n=t.length;e<n;e++){const n=new j(t[e],this,!1);n.bbox.ll.x<this.bbox.ll.x&&(this.bbox.ll.x=n.bbox.ll.x),n.bbox.ll.y<this.bbox.ll.y&&(this.bbox.ll.y=n.bbox.ll.y),n.bbox.ur.x>this.bbox.ur.x&&(this.bbox.ur.x=n.bbox.ur.x),n.bbox.ur.y>this.bbox.ur.y&&(this.bbox.ur.y=n.bbox.ur.y),this.interiorRings.push(n)}this.multiPoly=e}getSweepEvents(){const t=this.exteriorRing.getSweepEvents();for(let e=0,n=this.interiorRings.length;e<n;e++){const n=this.interiorRings[e].getSweepEvents();for(let e=0,r=n.length;e<r;e++)t.push(n[e])}return t}}class Y{constructor(t,e){if(!Array.isArray(t))throw new Error("Input geometry is not a valid Polygon or MultiPolygon");try{"number"==typeof t[0][0][0]&&(t=[t])}catch(t){}this.polys=[],this.bbox={ll:{x:Number.POSITIVE_INFINITY,y:Number.POSITIVE_INFINITY},ur:{x:Number.NEGATIVE_INFINITY,y:Number.NEGATIVE_INFINITY}};for(let e=0,n=t.length;e<n;e++){const n=new U(t[e],this);n.bbox.ll.x<this.bbox.ll.x&&(this.bbox.ll.x=n.bbox.ll.x),n.bbox.ll.y<this.bbox.ll.y&&(this.bbox.ll.y=n.bbox.ll.y),n.bbox.ur.x>this.bbox.ur.x&&(this.bbox.ur.x=n.bbox.ur.x),n.bbox.ur.y>this.bbox.ur.y&&(this.bbox.ur.y=n.bbox.ur.y),this.polys.push(n)}this.isSubject=e}getSweepEvents(){const t=[];for(let e=0,n=this.polys.length;e<n;e++){const n=this.polys[e].getSweepEvents();for(let e=0,r=n.length;e<r;e++)t.push(n[e])}return t}}class V{static factory(t){const e=[];for(let n=0,r=t.length;n<r;n++){const r=t[n];if(!r.isInResult()||r.ringOut)continue;let i=null,o=r.leftSE,s=r.rightSE;const l=[o],h=o.point,u=[];for(;i=o,o=s,l.push(o),o.point!==h;)for(;;){const t=o.getAvailableLinkedEvents();if(0===t.length){const t=l[0].point,e=l[l.length-1].point;throw new Error(`Unable to complete output ring starting at [${t.x}, ${t.y}]. Last matching segment found ends at [${e.x}, ${e.y}].`)}if(1===t.length){s=t[0].otherSE;break}let n=null;for(let t=0,e=u.length;t<e;t++)if(u[t].point===o.point){n=t;break}if(null!==n){const t=u.splice(n)[0],r=l.splice(t.index);r.unshift(r[0].otherSE),e.push(new V(r.reverse()));continue}u.push({index:l.length,point:o.point});const r=o.getLeftmostComparator(i);s=t.sort(r)[0].otherSE;break}e.push(new V(l))}return e}constructor(t){this.events=t;for(let e=0,n=t.length;e<n;e++)t[e].segment.ringOut=this;this.poly=null}getGeom(){let t=this.events[0].point;const e=[t];for(let n=1,r=this.events.length-1;n<r;n++){const r=this.events[n].point,i=this.events[n+1].point;0!==$(r,t,i)&&(e.push(r),t=r)}if(1===e.length)return null;const n=e[0],r=e[1];0===$(n,t,r)&&e.shift(),e.push(e[0]);const i=this.isExteriorRing()?1:-1,o=this.isExteriorRing()?0:e.length-1,s=this.isExteriorRing()?e.length:-1,l=[];for(let t=o;t!=s;t+=i)l.push([e[t].x,e[t].y]);return l}isExteriorRing(){if(void 0===this._isExteriorRing){const t=this.enclosingRing();this._isExteriorRing=!t||!t.isExteriorRing()}return this._isExteriorRing}enclosingRing(){return void 0===this._enclosingRing&&(this._enclosingRing=this._calcEnclosingRing()),this._enclosingRing}_calcEnclosingRing(){let t=this.events[0];for(let e=1,n=this.events.length;e<n;e++){const n=this.events[e];q.compare(t,n)>0&&(t=n)}let e=t.segment.prevInResult(),n=e?e.prevInResult():null;for(;;){if(!e)return null;if(!n)return e.ringOut;if(n.ringOut!==e.ringOut)return n.ringOut.enclosingRing()!==e.ringOut?e.ringOut:e.ringOut.enclosingRing();e=n.prevInResult(),n=e?e.prevInResult():null}}}class X{constructor(t){this.exteriorRing=t,t.poly=this,this.interiorRings=[]}addInterior(t){this.interiorRings.push(t),t.poly=this}getGeom(){const t=[this.exteriorRing.getGeom()];if(null===t[0])return null;for(let e=0,n=this.interiorRings.length;e<n;e++){const n=this.interiorRings[e].getGeom();null!==n&&t.push(n)}return t}}class Q{constructor(t){this.rings=t,this.polys=this._composePolys(t)}getGeom(){const t=[];for(let e=0,n=this.polys.length;e<n;e++){const n=this.polys[e].getGeom();null!==n&&t.push(n)}return t}_composePolys(t){const e=[];for(let n=0,r=t.length;n<r;n++){const r=t[n];if(!r.poly)if(r.isExteriorRing())e.push(new X(r));else{const t=r.enclosingRing();t.poly||e.push(new X(t)),t.poly.addInterior(r)}}return e}}class W{constructor(t){let e=arguments.length>1&&void 0!==arguments[1]?arguments[1]:F.compare;this.queue=t,this.tree=new l(e),this.segments=[]}process(t){const e=t.segment,n=[];if(t.consumedBy)return t.isLeft?this.queue.remove(t.otherSE):this.tree.remove(e),n;const r=t.isLeft?this.tree.add(e):this.tree.find(e);if(!r)throw new Error(`Unable to find segment #${e.id} [${e.leftSE.point.x}, ${e.leftSE.point.y}] -> [${e.rightSE.point.x}, ${e.rightSE.point.y}] in SweepLine tree.`);let i,o,s=r,l=r;for(;void 0===i;)s=this.tree.prev(s),null===s?i=null:void 0===s.key.consumedBy&&(i=s.key);for(;void 0===o;)l=this.tree.next(l),null===l?o=null:void 0===l.key.consumedBy&&(o=l.key);if(t.isLeft){let r=null;if(i){const t=i.getIntersection(e);if(null!==t&&(e.isAnEndpoint(t)||(r=t),!i.isAnEndpoint(t))){const e=this._splitSafely(i,t);for(let t=0,r=e.length;t<r;t++)n.push(e[t])}}let s=null;if(o){const t=o.getIntersection(e);if(null!==t&&(e.isAnEndpoint(t)||(s=t),!o.isAnEndpoint(t))){const e=this._splitSafely(o,t);for(let t=0,r=e.length;t<r;t++)n.push(e[t])}}if(null!==r||null!==s){let t=null;if(null===r)t=s;else if(null===s)t=r;else{t=q.comparePoints(r,s)<=0?r:s}this.queue.remove(e.rightSE),n.push(e.rightSE);const i=e.split(t);for(let t=0,e=i.length;t<e;t++)n.push(i[t])}n.length>0?(this.tree.remove(e),n.push(t)):(this.segments.push(e),e.prev=i)}else{if(i&&o){const t=i.getIntersection(o);if(null!==t){if(!i.isAnEndpoint(t)){const e=this._splitSafely(i,t);for(let t=0,r=e.length;t<r;t++)n.push(e[t])}if(!o.isAnEndpoint(t)){const e=this._splitSafely(o,t);for(let t=0,r=e.length;t<r;t++)n.push(e[t])}}}this.tree.remove(e)}return n}_splitSafely(t,e){this.tree.remove(t);const n=t.rightSE;this.queue.remove(n);const r=t.split(e);return r.push(n),void 0===t.consumedBy&&this.tree.add(t),r}}const Z="undefined"!=typeof process&&process.env.POLYGON_CLIPPING_MAX_QUEUE_SIZE||1e6,D="undefined"!=typeof process&&process.env.POLYGON_CLIPPING_MAX_SWEEPLINE_SEGMENTS||1e6;const H=new class{run(t,e,n){H.type=t,b.reset();const r=[new Y(e,!0)];for(let t=0,e=n.length;t<e;t++)r.push(new Y(n[t],!1));if(H.numMultiPolys=r.length,"difference"===H.type){const t=r[0];let e=1;for(;e<r.length;)null!==p(r[e].bbox,t.bbox)?e++:r.splice(e,1)}if("intersection"===H.type)for(let t=0,e=r.length;t<e;t++){const e=r[t];for(let n=t+1,i=r.length;n<i;n++)if(null===p(e.bbox,r[n].bbox))return[]}const i=new l(q.compare);for(let t=0,e=r.length;t<e;t++){const e=r[t].getSweepEvents();for(let t=0,n=e.length;t<n;t++)if(i.insert(e[t]),i.size>Z)throw new Error("Infinite loop when putting segment endpoints in a priority queue (queue size too big).")}const o=new W(i);let s=i.size,h=i.pop();for(;h;){const t=h.key;if(i.size===s){const e=t.segment;throw new Error(`Unable to pop() ${t.isLeft?"left":"right"} SweepEvent [${t.point.x}, ${t.point.y}] from segment #${e.id} [${e.leftSE.point.x}, ${e.leftSE.point.y}] -> [${e.rightSE.point.x}, ${e.rightSE.point.y}] from queue.`)}if(i.size>Z)throw new Error("Infinite loop when passing sweep line over endpoints (queue size too big).");if(o.segments.length>D)throw new Error("Infinite loop when passing sweep line over endpoints (too many sweep line segments).");const e=o.process(t);for(let t=0,n=e.length;t<n;t++){const n=e[t];void 0===n.consumedBy&&i.insert(n)}s=i.size,h=i.pop()}b.reset();const u=V.factory(o.segments);return new Q(u).getGeom()}};var J={union:function(t){for(var e=arguments.length,n=new Array(e>1?e-1:0),r=1;r<e;r++)n[r-1]=arguments[r];return H.run("union",t,n)},intersection:function(t){for(var e=arguments.length,n=new Array(e>1?e-1:0),r=1;r<e;r++)n[r-1]=arguments[r];return H.run("intersection",t,n)},xor:function(t){for(var e=arguments.length,n=new Array(e>1?e-1:0),r=1;r<e;r++)n[r-1]=arguments[r];return H.run("xor",t,n)},difference:function(t){for(var e=arguments.length,n=new Array(e>1?e-1:0),r=1;r<e;r++)n[r-1]=arguments[r];return H.run("difference",t,n)}};return J}));
+//# sourceMappingURL=polygon-clipping.umd.min.js.map
+
+</script>
 <script>
 (()=>{
 'use strict';
@@ -390,6 +436,7 @@ file:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
 copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
 pivot:'<circle cx="12" cy="12" r="3"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/>',
 layer:'<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
+pen:'<path d="M4 20l1-5L16 4l4 4L9 19z"/><path d="M14 6l4 4"/>',
 shape:'<circle cx="8" cy="9" r="4.5"/><rect x="11" y="11" width="9" height="9" rx="1.5"/>',
 wand:'<path d="M4 20L15 9"/><path d="M14 3l1 2.3 2.3 1-2.3 1-1 2.3-1-2.3-2.3-1 2.3-1z"/><path d="M19 12l.7 1.3 1.3.7-1.3.7-.7 1.3-.7-1.3-1.3-.7 1.3-.7z"/>',
 settings:'<path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/>',
@@ -566,6 +613,7 @@ function paint(){
   if(state.tool==='redraw')rdOverlay();
   if(gb)gbPaint();
   if(sdrag)shapePreview();
+  if(state.tool==='vector')vecOverlay();
   if(hover&&(state.tool==='brush'||state.tool==='eraser')){
     const rr=Math.max(1.5,brush.size*view.z/2);ctx.lineWidth=1;
     ctx.strokeStyle='rgba(20,20,19,.85)';ctx.beginPath();ctx.arc(hover.x,hover.y,rr+1,0,7);ctx.stroke();
@@ -602,7 +650,7 @@ function edit(fn,key){
 
 /* ---------- layer panel ---------- */
 const LP=$('#layers');let lastStruct='';
-function structKey(){return state.layers.map(l=>[l.id,l.name,l.vis?1:0,l.lock?1:0,l.ai?1:0,l.par||'',l.shape?l.shape.type+(shapeOk(l)?'+':'-'):'',l.fx?(fxOk(l)?'f+':'f-'):''].join(':')).join('|')+'#'+state.sel+'#'+[...msel].join(',')+'#'+jobs.map(j=>j.id+j.status).join(',')}
+function structKey(){return state.layers.map(l=>[l.id,l.name,l.vis?1:0,l.lock?1:0,l.ai?1:0,l.par||'',l.shape?l.shape.type+(shapeOk(l)?'+':'-'):'',l.fx?(fxOk(l)?'f+':'f-'):'',l.vec?(vecOk(l)?'v+':'v-'):''].join(':')).join('|')+'#'+state.sel+'#'+[...msel].join(',')+'#'+jobs.map(j=>j.id+j.status).join(',')}
 function drawThumb(c,r,L){
   const t=c.getContext('2d');t.clearRect(0,0,c.width,c.height);
   if(!r||!r.pv||!r.pv.width||!r.pv.height)return;
@@ -854,7 +902,7 @@ async function dupLayer(id){
   const L=state.layers.find(l=>l.id===id);if(!L)return;const nid=await cloneRec(id);
   const kids=[];for(const k of state.layers.filter(c=>c.par===id)){const kid=await cloneRec(k.id);kids.push({src:k,copy:{...k,id:kid,name:k.name+' copy',par:nid}})}
   edit(()=>{
-    const c={...L,id:nid,name:L.name+' copy'};state.layers.splice(state.layers.indexOf(L)+1,0,c);state.sel=nid;
+    const c={...L,id:nid,name:L.name+' copy',...(L.vec?{vec:JSON.parse(JSON.stringify(L.vec))}:{}),...(L.shape?{shape:{...L.shape}}:{})};state.layers.splice(state.layers.indexOf(L)+1,0,c);state.sel=nid;
     for(const k of kids)state.layers.splice(state.layers.indexOf(k.src)+1,0,k.copy);
   });
   if(kids.length)toast('duplicated with its '+kids.length+' attached part'+(kids.length>1?'s':''),'good');
@@ -889,10 +937,10 @@ function pickHandle(L,p,rad){
   return null;
 }
 function setCursor(){
-  const m={move:'default',hand:'grab',zoom:'zoom-in',brush:'crosshair',eraser:'crosshair',wand:'crosshair',cut:'crosshair',redraw:'crosshair',shape:'crosshair'};stage.style.cursor=spaceDown?'grab':m[state.tool]||'default';
+  const m={move:'default',hand:'grab',zoom:'zoom-in',brush:'crosshair',eraser:'crosshair',wand:'crosshair',cut:'crosshair',redraw:'crosshair',shape:'crosshair',vector:'crosshair'};stage.style.cursor=spaceDown?'grab':m[state.tool]||'default';
 }
 stage.addEventListener('pointerdown',e=>{
-  if(e.target.closest('#zoombar,#hint,#side-open,#tbar,#wbar,#cbar,#rbar,#sbar'))return;
+  if(e.target.closest('#zoombar,#hint,#side-open,#tbar,#wbar,#cbar,#rbar,#sbar,#vbar'))return;
   try{stage.setPointerCapture(e.pointerId)}catch(_){}
   ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,type:e.pointerType});
   if(e.pointerType!=='mouse')firstTouchHint();
@@ -903,6 +951,7 @@ stage.addEventListener('pointerdown',e=>{
   if(state.tool==='zoom'){zoomAt(e.altKey||e.shiftKey?1/1.5:1.5,p.x,p.y);return}
   if(state.tool==='wand'){wandPick(p);e.preventDefault();return}
   if(state.tool==='cut'){cutPick(p,e.shiftKey||cutAdd);e.preventDefault();return}
+  if(state.tool==='vector'){vecDown(e,p);e.preventDefault();return}
   if(state.tool==='shape'){sdrag={pid:e.pointerId,a:toScene(p),b:toScene(p),shift:e.shiftKey};e.preventDefault();draw();return}
   if(state.tool==='redraw'){rdDown(e,p);e.preventDefault();return}
   if(state.tool==='brush'||state.tool==='eraser'){beginStroke(e,p);e.preventDefault();return}
@@ -930,6 +979,7 @@ stage.addEventListener('pointermove',e=>{
   $('#st-r').textContent=`cursor ${Math.round(sp.x)}, ${Math.round(sp.y)} · brush ${brush.size}px · space-drag to pan`;
   hover=((state.tool==='brush'||state.tool==='eraser')&&!e.target.closest('#tbar,#wbar,#cbar,#zoombar'))?p:null;if(!stroke)draw();
   if(stroke&&e.pointerId===stroke.pid){moveStroke(e);return}
+  if(state.tool==='vector'){vecMove(e,p);if(vd&&e.pointerId===vd.pid)return}
   if(sdrag&&e.pointerId===sdrag.pid){sdrag.b=sp;sdrag.shift=e.shiftKey;draw();return}
   if(rd&&rd.cur&&e.pointerId===rd.cur.pid){rdMove(p);return}
   if(state.tool==='redraw'&&rd&&rd.mode==='brush'&&!e.target.closest('#rbar')){rd.hover=p;draw()}
@@ -985,6 +1035,7 @@ function endPtr(e){
   if([...ptrs.values()].filter(q=>q.type==='touch').length<2)pinch=null;
   if(old&&old.type==='touch')return;
   if(stroke&&e.pointerId===stroke.pid)finishStroke();
+  if(vd&&e.pointerId===vd.pid)vecUp(e);
   if(sdrag&&e.pointerId===sdrag.pid){const d=sdrag;sdrag=null;shapeFromDrag(d);draw()}
   if(drag){const was=drag;drag=null;setCursor();if(was.started||was.mode==='pan')changed()}
 }
@@ -2122,7 +2173,7 @@ stage.addEventListener('wheel',e=>{
 stage.addEventListener('contextmenu',e=>e.preventDefault());
 stage.addEventListener('dblclick',e=>{if(state.tool==='move'&&!hitLayer(toScene(lp(e)).x,toScene(lp(e)).y)&&!e.target.closest('#zoombar'))fit()});
 
-function setTool(t){if(sess&&t!=='wand')cancelWand();if(cs&&t!=='cut')cancelCut();if(rd&&t!=='redraw'){rd.shapes=[];rd.cur=null;rd.hover=null}state.tool=t;$('#rbar').classList.toggle('show',t==='redraw');$('#cbar').classList.toggle('show',t==='cut');$('#wbar').classList.toggle('show',t==='wand');$('#tbar').classList.toggle('show',t==='brush'||t==='eraser');$('#sbar').classList.toggle('show',t==='shape');sdrag=null;$('#tbar-t').textContent=t==='eraser'?'eraser':'brush';$$('.tool[data-tool]').forEach(b=>b.classList.toggle('on',b.dataset.tool===t));setCursor();draw();if(t==='wand')enterWand()}
+function setTool(t){if(state.tool==='vector'&&t!=='vector'&&typeof vecLeave==='function')vecLeave();if(sess&&t!=='wand')cancelWand();if(cs&&t!=='cut')cancelCut();if(rd&&t!=='redraw'){rd.shapes=[];rd.cur=null;rd.hover=null}state.tool=t;$('#rbar').classList.toggle('show',t==='redraw');$('#cbar').classList.toggle('show',t==='cut');$('#wbar').classList.toggle('show',t==='wand');$('#tbar').classList.toggle('show',t==='brush'||t==='eraser');$('#sbar').classList.toggle('show',t==='shape');$('#vbar').classList.toggle('show',t==='vector');sdrag=null;$('#tbar-t').textContent=t==='eraser'?'eraser':'brush';$$('.tool[data-tool]').forEach(b=>b.classList.toggle('on',b.dataset.tool===t));setCursor();draw();if(t==='wand')enterWand();if(t==='vector'&&typeof vecSyncUI==='function')vecSyncUI()}
 $$('.tool[data-tool]').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
 $('#z-in').onclick=()=>zoomAt(1.25,cw/2,ch/2);
 $('#z-out').onclick=()=>zoomAt(1/1.25,cw/2,ch/2);
@@ -2150,7 +2201,8 @@ addEventListener('keydown',e=>{
   if(e.key===' '){e.preventDefault();if(!spaceDown){spaceDown=true;setCursor()}return}
   if(mod)return;
   const L=sel();
-  if(k==='v')setTool('move');else if(k==='h')setTool('hand');else if(k==='z')setTool('zoom');else if(k==='b')setTool('brush');else if(k==='e')setTool('eraser');else if(k==='w')setTool('wand');else if(k==='c')setTool('cut');else if(k==='r')setTool('redraw');else if(k==='s')setTool('shape');
+  if(k==='v')setTool('move');else if(k==='h')setTool('hand');else if(k==='z')setTool('zoom');else if(k==='b')setTool('brush');else if(k==='e')setTool('eraser');else if(k==='w')setTool('wand');else if(k==='c')setTool('cut');else if(k==='r')setTool('redraw');else if(k==='s')setTool('shape');else if(k==='p'&&state.tool!=='vector'){setTool('vector');vecSetMode('pen')}
+  else if(state.tool==='vector'&&vecKey(e)){e.preventDefault()}
   else if(pickPar&&e.key==='Escape')cancelPick()
   else if(gb&&e.key==='Escape'){gb=null;gbBtn();draw()}
   else if(state.tool==='redraw'&&e.key==='Escape'){rd&&rd.shapes.length?rdClear():setTool('move')}
@@ -2216,6 +2268,7 @@ async function addImage(blob,name){
 }
 async function importFiles(files){
   files=[...files];if(!files.length)return;
+  const svgs=files.filter(f=>/\.svg$/i.test(f.name)||f.type==='image/svg+xml');if(svgs.length){files=files.filter(f=>!svgs.includes(f));for(const f of svgs)await vecImportSvg(await f.text(),f.name);if(!files.length)return}
   const zips=files.filter(f=>/\.zip$/i.test(f.name)),imgs=files.filter(f=>!/\.zip$/i.test(f.name)&&(f.type.startsWith('image/')||/\.(png|webp|jpe?g)$/i.test(f.name)));
   if(zips.length){await openZip(zips[0]);if(!imgs.length)return}
   imgs.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
@@ -2288,7 +2341,7 @@ function sceneJSON(list=state.layers,skipped){
   return {format:'layerforge-scene',version:1,name:state.name,width:state.W,height:state.H,
     notes:'layers are listed bottom to top (z = stacking order). parent (optional) = the file of the layer this one is attached to (eyes and mouth on an enemy, say): when the parent moves, scales or turns, this layer should follow it; the x / y / scale / rotation given here are its resting pose. tint (optional) recolours a layer in code: mode multiply = canvas multiply blend of color over the picture (keeps shading and outlines), mode color = canvas color blend (keeps brightness, swaps hue); amount 0-1 mixes the tinted picture over the original. x,y = top-left of the unscaled layer in scene pixels. scale (1 = 100%) and rotation (degrees, clockwise) turn the layer around pivot (0-1 across the layer, can fall outside it). anim (optional) = motions per named clip, role = the part of a puppet character: see ANIM-README.md.',
     ...(skipped?{skipped}:{}),
-    layers:list.map((l,i)=>({...parentInfo(l,list),name:l.name,file:fileFor(l,i),z:i,x:l.x,y:l.y,w:l.w,h:l.h,scale:l.scale,rotation:l.rot,pivot:{x:l.px,y:l.py},opacity:l.op,visible:l.vis,locked:l.lock,ai:l.ai,...(l.tint?{tint:{color:l.tint,mode:l.tm||'multiply',amount:l.ta==null?1:l.ta}}:{}),...(l.shape&&shapeOk(l)?{shape:shapePublic(l.shape)}:{}),...(l.fx&&fxOk(l)?{fx:fxPublic(l,i)}:{}),...(l.role?{role:l.role}:{}),...(l.anim?{anim:l.anim}:{})}))};
+    layers:list.map((l,i)=>({...parentInfo(l,list),name:l.name,file:fileFor(l,i),z:i,x:l.x,y:l.y,w:l.w,h:l.h,scale:l.scale,rotation:l.rot,pivot:{x:l.px,y:l.py},opacity:l.op,visible:l.vis,locked:l.lock,ai:l.ai,...(l.tint?{tint:{color:l.tint,mode:l.tm||'multiply',amount:l.ta==null?1:l.ta}}:{}),...(l.shape&&shapeOk(l)?{shape:shapePublic(l.shape)}:{}),...(l.vec&&vecOk(l)?{vec:vecPublic(l.vec)}:{}),...(l.fx&&fxOk(l)?{fx:fxPublic(l,i)}:{}),...(l.role?{role:l.role}:{}),...(l.anim?{anim:l.anim}:{})}))};
 }
 const TOUCH=('ontouchstart' in window)&&navigator.maxTouchPoints>1;
 let zipNm='';try{zipNm=localStorage.getItem('lf-zipnm')||''}catch(_){}
@@ -2338,7 +2391,7 @@ async function openZip(file){
         const fk=[...files.keys()].find(k=>k.replace(/^.*\//,'')===String(m.file||'').replace(/^.*\//,''));
         if(!fk){toast('missing file for layer '+m.name,'warn');continue}
         const r=await makeRec(mk(files.get(fk)),{trim:false});if(!r)continue;const id=newId();store.set(id,r.rec);
-        state.layers.push({id,name:m.name||niceName(fk),x:+m.x||0,y:+m.y||0,w:r.rec.w,h:r.rec.h,scale:m.scale??1,rot:m.rotation??0,px:m.pivot?.x??.5,py:m.pivot?.y??.5,op:m.opacity??1,vis:m.visible!==false,lock:!!m.locked,ai:!!m.ai,...(m.tint&&m.tint.color?{tint:String(m.tint.color),tm:m.tint.mode==='color'?'color':'multiply',ta:m.tint.amount==null?1:+m.tint.amount}:{}),...(m.shape&&m.shape.type?{shape:shapeClean(m.shape,r.rec.blob.size)}:{}),...(m.fx&&typeof m.fx==='object'?{fx:await fxLoad(m.fx,files,r.rec.blob.size)}:{}),...(m.anim?(()=>{const a=animCleanAll(m.anim);return a?{anim:a}:{}})():{}),...(m.role&&ANROLES.some(q=>q[0]===m.role)?{role:m.role}:{})});
+        state.layers.push({id,name:m.name||niceName(fk),x:+m.x||0,y:+m.y||0,w:r.rec.w,h:r.rec.h,scale:m.scale??1,rot:m.rotation??0,px:m.pivot?.x??.5,py:m.pivot?.y??.5,op:m.opacity??1,vis:m.visible!==false,lock:!!m.locked,ai:!!m.ai,...(m.tint&&m.tint.color?{tint:String(m.tint.color),tm:m.tint.mode==='color'?'color':'multiply',ta:m.tint.amount==null?1:+m.tint.amount}:{}),...(m.shape&&m.shape.type?{shape:shapeClean(m.shape,r.rec.blob.size)}:{}),...(m.vec&&Array.isArray(m.vec.paths)?{vec:vecClean(m.vec,r.rec.blob.size)}:{}),...(m.fx&&typeof m.fx==='object'?{fx:await fxLoad(m.fx,files,r.rec.blob.size)}:{}),...(m.anim?(()=>{const a=animCleanAll(m.anim);return a?{anim:a}:{}})():{}),...(m.role&&ANROLES.some(q=>q[0]===m.role)?{role:m.role}:{})});
         byFile.set(String(m.file||'').replace(/^.*\//,''),id);if(m.parent)wantPar.push([id,String(m.parent).replace(/^.*\//,'')]);
       }
       for(const [cid,pf] of wantPar){const pid=byFile.get(pf);const C=state.layers.find(l=>l.id===cid);if(C&&pid&&pid!==cid)C.par=pid}
@@ -2581,6 +2634,591 @@ LP.addEventListener('click',e=>{
   const [cx,cy]=l2s(L,L.w/2,L.h/2);L.scale=1;shapePlace(L,L.w,L.h);
   tcache.clear();shapeCommit();
 });
+
+/* ---------- vector: paths made of nodes (pen, pencil, shapes), edit nodes, combine shapes (boolean), svg in and out ---------- */
+// A vector layer keeps its paths (layer.vec) and its picture. Paths are in the layer's own pixels; each node is [x, y, inX, inY, outX, outY] (handles are offsets).
+var vs={mode:'select',sel:new Set(),node:null,pen:null,hover:null,fill:'#D97757',fillOn:true,stroke:'#E8E6DC',strokeOn:false,sw:8,grad:false,fill2:'#7A3E2B',gang:90,sides:6,pts:5,inner:.5,round:0,sess:null,raf:0,dirty:null,tap:null,busy:false},vd=null;
+const VK=0.5523;let vseq=0;const vpid=()=>'p'+(++vseq)+Math.random().toString(36).slice(2,5);
+const vnum=(v,d,a,b)=>{v=+v;a=a==null?-1e5:a;b=b==null?1e5:b;return isFinite(v)?Math.min(b,Math.max(a,v)):d};
+function vecClean(o,bs){
+  const paths=[];
+  for(const p of (o&&Array.isArray(o.paths)?o.paths:[]).slice(0,800)){
+    if(!p||!Array.isArray(p.sp))continue;const sp=[];
+    for(const s of p.sp.slice(0,200)){if(!s||!Array.isArray(s.n))continue;const n=s.n.slice(0,5000).filter(q=>Array.isArray(q)&&q.length>=2).map(q=>[0,1,2,3,4,5].map(i=>vnum(q[i],0)));if(n.length)sp.push({n,c:!!s.c})}
+    if(!sp.length)continue;
+    const g=p.g&&hex6(p.g.a)&&hex6(p.g.b)?{a:p.g.a,b:p.g.b,ang:vnum(p.g.ang,90,-3600,3600)}:null;
+    paths.push({id:typeof p.id==='string'&&p.id?p.id.slice(0,24):vpid(),sp,f:hex6(p.f)?p.f:null,g,s:hex6(p.s)?p.s:null,w:vnum(p.w,0,0,2000)});
+  }
+  return {paths,bs};
+}
+const vecPublic=v=>({paths:v.paths});
+function vecOk(l){if(!l.vec)return false;const r=store.get(l.id);return !!(r&&r.blob&&r.blob.size===l.vec.bs)}
+const vecLayer=l=>!!(l&&l.vec&&(vecOk(l)||(vs.sess&&vs.sess.id===l.id)));
+/* geometry */
+const vseg=(a,b)=>[a[0],a[1],a[0]+a[4],a[1]+a[5],b[0]+b[2],b[1]+b[3],b[0],b[1]];
+const vflat=(a,b)=>!(a[4]||a[5]||b[2]||b[3]);
+function vtrace(c,p,m){
+  const M=m||((x,y)=>[x,y]);c.beginPath();
+  for(const s of p.sp){const n=s.n;if(!n.length)continue;let q=M(n[0][0],n[0][1]);c.moveTo(q[0],q[1]);
+    const seg=(a,b)=>{if(vflat(a,b)){q=M(b[0],b[1]);c.lineTo(q[0],q[1])}else{const k=vseg(a,b),u=M(k[2],k[3]),v=M(k[4],k[5]),w=M(k[6],k[7]);c.bezierCurveTo(u[0],u[1],v[0],v[1],w[0],w[1])}};
+    for(let i=1;i<n.length;i++)seg(n[i-1],n[i]);
+    if(s.c){if(n.length>1)seg(n[n.length-1],n[0]);c.closePath()}}
+}
+function vpts(p,steps){ // each subpath as a list of points along it
+  return p.sp.map(s=>{const out=[],n=s.n,cnt=s.c?n.length:n.length-1;
+    for(let i=0;i<Math.max(cnt,0);i++){const a=n[i],b=n[(i+1)%n.length];
+      if(vflat(a,b)){out.push([a[0],a[1]]);continue}
+      const k=vseg(a,b),len=Math.hypot(k[6]-k[0],k[7]-k[1])+Math.hypot(k[2]-k[0],k[3]-k[1])+Math.hypot(k[4]-k[2],k[5]-k[3])+Math.hypot(k[6]-k[4],k[7]-k[5]),N=steps||Math.max(6,Math.min(400,Math.ceil(len/3)));
+      for(let j=0;j<N;j++){const t=j/N,u=1-t,A=u*u*u,B=3*u*u*t,C=3*u*t*t,D=t*t*t;out.push([A*k[0]+B*k[2]+C*k[4]+D*k[6],A*k[1]+B*k[3]+C*k[5]+D*k[7]])}}
+    if(!s.c&&n.length)out.push([n[n.length-1][0],n[n.length-1][1]]);
+    return out});
+}
+function vbbox(p,steps){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const r of vpts(p,steps||16))for(const q of r){if(q[0]<x0)x0=q[0];if(q[0]>x1)x1=q[0];if(q[1]<y0)y0=q[1];if(q[1]>y1)y1=q[1]}return x0>x1?null:[x0,y0,x1,y1]}
+function vecBounds(v){let b=null;for(const p of v.paths){const q=vbbox(p);if(!q)continue;const h=p.s&&p.w?p.w/2+1:0;q[0]-=h;q[1]-=h;q[2]+=h;q[3]+=h;b=b?[Math.min(b[0],q[0]),Math.min(b[1],q[1]),Math.max(b[2],q[2]),Math.max(b[3],q[3])]:q}return b||[0,0,8,8]}
+function vgrad(c,g,bb){const a=g.ang*D2R,dx=Math.cos(a),dy=Math.sin(a),w=bb[2]-bb[0],h=bb[3]-bb[1],cx=(bb[0]+bb[2])/2,cy=(bb[1]+bb[3])/2,half=(Math.abs(w*dx)+Math.abs(h*dy))/2||1,gr=c.createLinearGradient(cx-dx*half,cy-dy*half,cx+dx*half,cy+dy*half);gr.addColorStop(0,g.a);gr.addColorStop(1,g.b);return gr}
+function vpaint(c,v){
+  for(const p of v.paths){vtrace(c,p);
+    if(p.g||p.f){const bb=p.g?(vbbox(p)||[0,0,1,1]):null;c.fillStyle=p.g?vgrad(c,p.g,bb):p.f;c.fill('evenodd')}
+    if(p.s&&p.w>0){c.lineWidth=p.w;c.strokeStyle=p.s;c.lineJoin='round';c.lineCap='round';c.stroke()}}
+}
+/* keeping the layer fitted around its paths */
+function vecBake(L){ // a scaled or turned layer: write the change into the points so editing is simple (the picture does not change)
+  if(L.scale===1&&!L.rot)return;const v=L.vec,s=L.scale,a=L.rot*D2R,co=Math.cos(a),si=Math.sin(a);
+  for(const p of v.paths){p.w*=s;if(p.g)p.g.ang+=L.rot;for(const sp of p.sp)for(const n of sp.n){const q=l2s(L,n[0],n[1]);n[0]=q[0];n[1]=q[1];for(const k of [2,4]){const hx=n[k],hy=n[k+1];n[k]=(hx*co-hy*si)*s;n[k+1]=(hx*si+hy*co)*s}}}
+  L.x=0;L.y=0;L.scale=1;L.rot=0;
+}
+function vecFit(L){
+  const v=L.vec,pv=l2s(L,L.px*L.w,L.py*L.h);vecBake(L);
+  const b=vecBounds(v),dx=Math.floor(b[0])-2,dy=Math.floor(b[1])-2,W=Math.min(8192,Math.max(1,Math.ceil(b[2])-dx+2)),H=Math.min(8192,Math.max(1,Math.ceil(b[3])-dy+2));
+  if(dx||dy){for(const p of v.paths)for(const s of p.sp)for(const n of s.n){n[0]-=dx;n[1]-=dy}L.x+=dx;L.y+=dy}
+  L.w=W;L.h=H;L.px=(pv[0]-L.x)/W;L.py=(pv[1]-L.y)/H;return [W,H];
+}
+function vecFlush(){
+  cancelAnimationFrame(vs.raf);vs.raf=0;
+  const id=vs.dirty;vs.dirty=null;const L=id&&state.layers.find(l=>l.id===id);if(!L||!L.vec)return;const r=store.get(L.id);if(!r)return;
+  const [W,H]=vecFit(L),cv=document.createElement('canvas');cv.width=W;cv.height=H;vpaint(cv.getContext('2d'),L.vec);
+  r.pv=cv;r.w=W;r.h=H;r.tc=null;tcache.clear();changedFast();
+  const row=$(`.row[data-id="${id}"] canvas.thumb`,LP);if(row)drawThumb(row,r,L);
+}
+function vecDirty(L){vs.dirty=L.id;if(!vs.raf)vs.raf=requestAnimationFrame(vecFlush)}
+function vecBegin(L){ // call right before the first change of an action: remembers how things were, for undo
+  if(vs.sess)return;vs.sess={id:L.id,blob:store.get(L.id).blob,meta:snapshot()};
+  if(L.scale!==1||L.rot){vs.dirty=L.id;vecFlush()}
+}
+async function vecCommit(){
+  const ss=vs.sess;if(!ss)return;vecFlush();vs.sess=null;
+  const L=state.layers.find(l=>l.id===ss.id),r=store.get(ss.id);if(!L||!r||!L.vec)return;
+  vs.busy=true;
+  const pr=(async()=>{const cv=r.pv,blob=await toBlobAsync(cv);r.blob=blob;L.vec.bs=blob.size;Object.assign(r,maskFrom(cv));r.tc=null;savedBlobs.delete(ss.id);
+    U.push({px:ss.id,blob:ss.blob,meta:ss.meta});if(U.length>100)U.shift();R.length=0;lastStruct='';tcache.clear();changed()})();
+  r.pending=pr;try{await pr}catch(err){console.warn(err)}finally{vs.busy=false;if(r.pending===pr)r.pending=null}
+}
+function blobSync(cv){const d=atob(cv.toDataURL('image/png').split(',')[1]),u=new Uint8Array(d.length);for(let i=0;i<d.length;i++)u[i]=d.charCodeAt(i);return new Blob([u],{type:'image/png'})}
+function vecNewLayer(name,paths){
+  const cv=document.createElement('canvas');cv.width=cv.height=8;const blob=blobSync(cv),id=newId(),m=maskFrom(cv);
+  const vec={paths:paths||[],bs:blob.size};store.set(id,{blob,pv:cv,mask:m.mask,mw:m.mw,mh:m.mh,w:8,h:8});
+  const n=state.layers.filter(l=>l.vec).length+1,i=state.layers.findIndex(l=>l.id===state.sel);
+  const L={id,name:name||'vector '+n,x:0,y:0,w:8,h:8,scale:1,rot:0,px:.5,py:.5,op:1,vis:true,lock:false,ai:false,vec};
+  edit(()=>{state.layers.splice(i<0?state.layers.length:i+1,0,L);state.sel=id});
+  return L;
+}
+function vecTarget(create){
+  const L=sel();
+  if(vecLayer(L)){if(L.lock){toast('this layer is locked','warn');return null}return L}
+  return create?vecNewLayer():null;
+}
+/* styles */
+function vfillOf(){return !vs.fillOn?{f:null,g:null}:vs.grad?{f:null,g:{a:vs.fill,b:vs.fill2,ang:vs.gang}}:{f:vs.fill,g:null}}
+function vstyle(open){
+  if(open)return {f:null,g:null,s:vs.strokeOn?vs.stroke:vs.fill,w:vs.sw};
+  const st={...vfillOf(),s:vs.strokeOn?vs.stroke:null,w:vs.strokeOn?vs.sw:0};
+  if(!st.f&&!st.g&&!st.s){st.s=vs.stroke;st.w=vs.sw}return st;
+}
+function vecStyleApply(){
+  const L=sel();if(!vecLayer(L)||L.lock||!vs.sel.size)return;vecBegin(L);
+  for(const p of L.vec.paths)if(vs.sel.has(p.id)){const f=vfillOf();p.f=f.f;p.g=f.g;if(vs.strokeOn){p.s=vs.stroke;p.w=vs.sw}else p.s=null}
+  vecDirty(L);
+}
+function vecSyncUI(fromSel){
+  const L=sel();let p=null;if(fromSel&&vecLayer(L))p=L.vec.paths.find(q=>vs.sel.has(q.id));
+  if(p){vs.fillOn=!!(p.f||p.g);vs.grad=!!p.g;if(p.g){vs.fill=p.g.a;vs.fill2=p.g.b;vs.gang=p.g.ang}else if(p.f)vs.fill=p.f;vs.strokeOn=!!p.s;if(p.s){vs.stroke=p.s;vs.sw=p.w||vs.sw}}
+  const g=id=>$('#'+id);g('vfill').value=vs.fill;g('vfillon').checked=vs.fillOn;g('vgrad').checked=vs.grad;g('vfill2').value=vs.fill2;g('vgang').value=Math.round(vs.gang);g('vstroke').value=vs.stroke;g('vstrokeon').checked=vs.strokeOn;g('vsw').value=Math.round(vs.sw*10)/10;
+  g('vgwrap').hidden=!vs.grad;
+  const n=L&&vecLayer(L)?L.vec.paths.filter(q=>vs.sel.has(q.id)).length:0;
+  $$('[data-vb]').forEach(b=>{const k=b.dataset.vb;b.disabled=(['union','subtract','intersect','exclude'].includes(k)&&n<2)||(['dup','up','down','del','addnode','delnode','smooth','sharp','close'].includes(k)&&!n)||(k==='svgout'&&!vecLayer(L))});
+  $('#vinfo').textContent=!vecLayer(L)?(L&&L.vec?'this layer was painted on, so its paths are gone · the next path makes a new layer':'draw a path or shape to make a vector layer'):n?n+' selected'+(vs.node?' · node '+(vs.node.i+1):''):'tap a shape to select it';
+  $('#vn-w').hidden=!(vs.mode==='poly');$('#vp-w').hidden=!(vs.mode==='star');$('#vi-w').hidden=!(vs.mode==='star');$('#vr-w').hidden=!(vs.mode==='rect');
+  $('#vn').value=vs.sides;$('#vp').value=vs.pts;$('#vi').value=Math.round(vs.inner*100);$('#vr').value=vs.round;
+  $$('#vmodes .sm').forEach(b=>b.classList.toggle('on',b.dataset.vm===vs.mode));
+}
+/* shapes as nodes */
+const vN=(x,y,ix,iy,ox,oy)=>[x,y,ix||0,iy||0,ox||0,oy||0];
+function vellNodes(cx,cy,rx,ry){const kx=rx*VK,ky=ry*VK;return {n:[vN(cx,cy-ry,-kx,0,kx,0),vN(cx+rx,cy,0,-ky,0,ky),vN(cx,cy+ry,kx,0,-kx,0),vN(cx-rx,cy,0,ky,0,-ky)],c:true}}
+function vrectNodes(l,t,aw,ah,r){
+  r=Math.min(r,aw/2,ah/2);if(r<.5)return {n:[vN(l,t),vN(l+aw,t),vN(l+aw,t+ah),vN(l,t+ah)],c:true};
+  const k=r*VK;return {n:[vN(l+r,t,-k,0),vN(l+aw-r,t,0,0,k,0),vN(l+aw,t+r,0,-k),vN(l+aw,t+ah-r,0,0,0,k),vN(l+aw-r,t+ah,k,0),vN(l+r,t+ah,0,0,-k,0),vN(l,t+ah-r,0,k),vN(l,t+r,0,0,0,-k)],c:true};
+}
+function vshape(kind,x0,y0,x1,y1){
+  const l=Math.min(x0,x1),t=Math.min(y0,y1),aw=Math.abs(x1-x0),ah=Math.abs(y1-y0);
+  if(kind==='line')return {n:[vN(x0,y0),vN(x1,y1)],c:false};
+  if(kind==='ellipse')return vellNodes(l+aw/2,t+ah/2,aw/2,ah/2);
+  if(kind==='rect')return vrectNodes(l,t,aw,ah,Math.min(aw,ah)/2*(vs.round/100));
+  const n=kind==='poly'?vs.sides:vs.pts*2,pts=[];
+  for(let k=0;k<n;k++){const a=(-90+360*k/n)*D2R,rr=kind==='star'&&k%2?vs.inner:1;pts.push([rr*Math.cos(a),rr*Math.sin(a)])}
+  let a0=1e9,a1=-1e9,b0=1e9,b1=-1e9;for(const q of pts){a0=Math.min(a0,q[0]);a1=Math.max(a1,q[0]);b0=Math.min(b0,q[1]);b1=Math.max(b1,q[1])}
+  return {n:pts.map(q=>vN(l+(q[0]-a0)/(a1-a0)*aw,t+(q[1]-b0)/(b1-b0)*ah)),c:true};
+}
+const vloc=(L,s)=>({c:s.c,n:s.n.map(n=>{const a=s2l(L,n[0],n[1]),i=s2l(L,n[0]+n[2],n[1]+n[3]),o=s2l(L,n[0]+n[4],n[1]+n[5]);return [a[0],a[1],i[0]-a[0],i[1]-a[1],o[0]-a[0],o[1]-a[1]]})}); // scene-space subpath -> this layer's pixels
+/* pointer handling */
+function vtol(e){return e.pointerType==='mouse'?9:18}
+function vnodeRef(L){const r=vs.node;if(!r||!L||!L.vec)return null;const p=L.vec.paths.find(q=>q.id===r.p);if(!p)return null;const s=p.sp[r.si];if(!s||!s.n[r.i])return null;return {p,s,n:s.n[r.i],i:r.i,si:r.si}}
+const vscr=(L,x,y)=>toScreen(l2s(L,x,y)),vts=o=>toScreen([o.x,o.y]);
+const vctx=document.createElement('canvas').getContext('2d');
+function vhitPath(L,lx,ly,tol){
+  const ps=L.vec.paths;
+  for(let i=ps.length-1;i>=0;i--){const p=ps[i];vtrace(vctx,p);
+    if((p.f||p.g)&&vctx.isPointInPath(lx,ly,'evenodd'))return p;
+    vctx.lineWidth=(p.s?p.w:0)+tol*2;if(vctx.isPointInStroke(lx,ly))return p}
+  return null;
+}
+function vhitNode(L,p,rad){ // screen point -> a handle or node of the selected paths
+  const near=(x,y)=>{const q=vscr(L,x,y);return Math.hypot(q.x-p.x,q.y-p.y)<=rad};
+  const r=vnodeRef(L);
+  if(r){const n=r.n;if((n[2]||n[3])&&near(n[0]+n[2],n[1]+n[3]))return {p:r.p,si:r.si,i:r.i,k:'in'};if((n[4]||n[5])&&near(n[0]+n[4],n[1]+n[5]))return {p:r.p,si:r.si,i:r.i,k:'out'}}
+  for(let a=L.vec.paths.length-1;a>=0;a--){const pa=L.vec.paths[a];if(!vs.sel.has(pa.id))continue;
+    for(let si=0;si<pa.sp.length;si++){const n=pa.sp[si].n;for(let i=n.length-1;i>=0;i--)if(near(n[i][0],n[i][1]))return {p:pa,si,i,k:'a'}}}
+  return null;
+}
+function vtapDouble(p){const t=performance.now(),o=vs.tap;vs.tap={t,x:p.x,y:p.y};return !!(o&&t-o.t<420&&Math.hypot(o.x-p.x,o.y-p.y)<18)}
+function vecDown(e,p){
+  if(vs.busy)return;const sp=toScene(p);
+  if(vs.mode==='select')return vecSelDown(e,p,sp);
+  if(vs.mode==='pen')return vecPenDown(e,p,sp);
+  if(vs.mode==='pencil'){vd={kind:'pencil',pid:e.pointerId,pts:[sp]};return}
+  vd={kind:'shape',pid:e.pointerId,a:sp,b:sp,shift:e.shiftKey};draw();
+}
+function vecSelDown(e,p,sp){
+  let L=vecTarget(false);const rad=vtol(e);
+  if(L){
+    const h=vhitNode(L,p,rad);
+    if(h){
+      const n=h.p.sp[h.si].n[h.i],q=vscr(L,n[0],n[1]);
+      vs.node={p:h.p.id,si:h.si,i:h.i};if(!vs.sel.has(h.p.id))vs.sel=new Set([h.p.id]);
+      const smooth=(()=>{const a=Math.hypot(n[2],n[3]),b=Math.hypot(n[4],n[5]);return a>.01&&b>.01&&Math.abs(n[2]*n[5]-n[3]*n[4])/(a*b)<.03&&n[2]*n[4]+n[3]*n[5]<0})();
+      const as=l2s(L,n[0],n[1]);
+      vd={kind:h.k==='a'?'node':h.k,pid:e.pointerId,L,node:n,smooth,off:{x:as[0]-sp.x,y:as[1]-sp.y},p0:p,moved:false,path:h.p.id,si:h.si,i:h.i};
+      vecSyncUI(true);draw();return;
+    }
+    const [lx,ly]=s2l(L,sp.x,sp.y),hp=vhitPath(L,lx,ly,rad/view.z/L.scale);
+    if(hp){
+      if(e.shiftKey){vs.sel.has(hp.id)?vs.sel.delete(hp.id):vs.sel.add(hp.id);vs.node=null;vecSyncUI(true);draw();return}
+      if(!vs.sel.has(hp.id)){vs.sel=new Set([hp.id]);vs.node=null}
+      vd={kind:'move',pid:e.pointerId,L,s0:sp,p0:p,moved:false,tap:hp.id,double:vtapDouble(p)};vecSyncUI(true);draw();return;
+    }
+  }
+  const hl=hitLayer(sp.x,sp.y);
+  if(hl&&(!L||hl.id!==L.id)){state.sel=hl.id;vs.sel=new Set();vs.node=null;vecSyncUI(true);changed();return}
+  vd={kind:'marq',pid:e.pointerId,a:sp,b:sp,add:e.shiftKey};
+  if(!e.shiftKey){vs.sel=new Set();vs.node=null}vecSyncUI(true);draw();
+}
+function vecPenDown(e,p,sp){
+  const L=vecTarget(true);if(!L)return;const lp=s2l(L,sp.x,sp.y);
+  let path=vs.pen&&L.vec.paths.find(q=>q.id===vs.pen.p);
+  if(!path){vecBegin(L);path={id:vpid(),sp:[{n:[],c:false}],...vstyle(true)};L.vec.paths.push(path);vs.sel=new Set([path.id]);vs.pen={p:path.id};vs.node=null}
+  const s=path.sp[0];
+  if(s.n.length>=2){
+    const f=s.n[0],q=vscr(L,f[0],f[1]),last=s.n[s.n.length-1],q2=vscr(L,last[0],last[1]),rad=vtol(e);
+    if(Math.hypot(q.x-p.x,q.y-p.y)<rad){s.c=true;Object.assign(path,vstyle(false));vecPenEnd();return}
+    if(Math.hypot(q2.x-p.x,q2.y-p.y)<rad*.7){vecPenEnd();return}
+  }
+  const n=[lp[0],lp[1],0,0,0,0];s.n.push(n);vs.node={p:path.id,si:0,i:s.n.length-1};
+  vd={kind:'pennode',pid:e.pointerId,L,n,p0:p};vecDirty(L);draw();
+}
+function vecPenEnd(){
+  if(!vs.pen)return;const pr=vs.pen;vs.pen=null;const L=sel();
+  if(L&&L.vec){const path=L.vec.paths.find(q=>q.id===pr.p);
+    if(path&&path.sp[0].n.length<2){L.vec.paths.splice(L.vec.paths.indexOf(path),1);vs.sel=new Set();vs.node=null}
+    vecDirty(L)}
+  vecCommit().then(()=>{vecSyncUI();draw()});vecSyncUI();draw();
+}
+function vecMove(e,p){
+  const sp=toScene(p);vs.hover=sp;
+  if(!vd||e.pointerId!==vd.pid){if(vs.pen)draw();return}
+  const L=vd.L;
+  switch(vd.kind){
+    case 'pennode':{if(Math.hypot(p.x-vd.p0.x,p.y-vd.p0.y)>3){const q=s2l(L,sp.x,sp.y),n=vd.n;n[4]=q[0]-n[0];n[5]=q[1]-n[1];n[2]=-n[4];n[3]=-n[5];vecDirty(L)}break}
+    case 'node':{
+      if(!vd.moved){if(Math.hypot(p.x-vd.p0.x,p.y-vd.p0.y)<4)break;vd.moved=true;vecBegin(L)}
+      const q=s2l(L,sp.x+vd.off.x,sp.y+vd.off.y);vd.node[0]=q[0];vd.node[1]=q[1];vecDirty(L);break}
+    case 'in':case 'out':{
+      if(!vd.moved){if(Math.hypot(p.x-vd.p0.x,p.y-vd.p0.y)<4)break;vd.moved=true;vecBegin(L)}
+      const n=vd.node,q=s2l(L,sp.x,sp.y),hx=q[0]-n[0],hy=q[1]-n[1],a=vd.kind==='in'?2:4,b=vd.kind==='in'?4:2;
+      const ob=Math.hypot(n[b],n[b+1]);n[a]=hx;n[a+1]=hy;
+      if(vd.smooth&&!e.altKey){const hl=Math.hypot(hx,hy)||1;n[b]=-hx/hl*ob;n[b+1]=-hy/hl*ob}
+      vecDirty(L);break}
+    case 'move':{
+      if(!vd.moved){if(Math.hypot(p.x-vd.p0.x,p.y-vd.p0.y)<4)break;vd.moved=true;vecBegin(L);
+        vd.orig=[];for(const pa of L.vec.paths)if(vs.sel.has(pa.id))for(const s of pa.sp)for(const n of s.n){const q=l2s(L,n[0],n[1]);vd.orig.push({n,x:q[0],y:q[1]})}}
+      const dx=sp.x-vd.s0.x,dy=sp.y-vd.s0.y;for(const o of vd.orig){const q=s2l(L,o.x+dx,o.y+dy);o.n[0]=q[0];o.n[1]=q[1]}vecDirty(L);break}
+    case 'marq':vd.b=sp;draw();break;
+    case 'shape':vd.b=sp;vd.shift=e.shiftKey;draw();break;
+    case 'pencil':{const l=vd.pts[vd.pts.length-1];if(Math.hypot(sp.x-l.x,sp.y-l.y)*view.z>2)vd.pts.push(sp);draw();break}
+  }
+}
+function vecUp(e){
+  const d=vd;vd=null;if(!d)return;const L=d.L;
+  switch(d.kind){
+    case 'pennode':return;
+    case 'node':case 'in':case 'out':{
+      if(d.moved){vecCommit().then(()=>{vecSyncUI();draw()});return}
+      if(d.kind==='node'&&vtapDouble(d.p0)){const l=vecLayer(sel())?sel():null;if(l){vecBegin(l);vecToggleSmooth(l)}}
+      return}
+    case 'move':{
+      if(d.moved){vecCommit().then(()=>{vecSyncUI();draw()});return}
+      if(d.double){const l=sel();if(vecLayer(l)){const sp=toScene(d.p0),[lx,ly]=s2l(l,sp.x,sp.y);if(vecAddNodeAt(l,lx,ly)){return}}}
+      if(!e.shiftKey)vs.sel=new Set([d.tap]);vs.node=null;vecSyncUI(true);draw();return}
+    case 'marq':{
+      const l=vecTarget(false),a=d.a,b=d.b;
+      if(l&&Math.hypot(a.x-b.x,a.y-b.y)*view.z>4){
+        const q=[s2l(l,a.x,a.y),s2l(l,b.x,b.y)],x0=Math.min(q[0][0],q[1][0]),x1=Math.max(q[0][0],q[1][0]),y0=Math.min(q[0][1],q[1][1]),y1=Math.max(q[0][1],q[1][1]);
+        for(const p of l.vec.paths){const bb=vbbox(p);if(bb&&bb[0]<=x1&&bb[2]>=x0&&bb[1]<=y1&&bb[3]>=y0)vs.sel.add(p.id)}}
+      vecSyncUI(true);draw();return}
+    case 'shape':{
+      const a=d.a;let b=d.b;const kind=vs.mode;
+      let w=Math.abs(b.x-a.x),h=Math.abs(b.y-a.y);
+      if(w<6&&h<6){if(kind==='line')return draw();b={x:a.x+150,y:a.y+150};a.x-=150;a.y-=150;w=h=300}
+      else if(d.shift&&kind!=='line'){const m=Math.max(w,h);b={x:a.x+Math.sign(b.x-a.x||1)*m,y:a.y+Math.sign(b.y-a.y||1)*m}}
+      const l=vecTarget(true);if(!l)return;vecBegin(l);
+      const s=vloc(l,vshape(kind,a.x,a.y,b.x,b.y)),path={id:vpid(),sp:[s],...vstyle(kind==='line')};
+      l.vec.paths.push(path);vs.sel=new Set([path.id]);vs.node=null;vecDirty(l);vecCommit().then(()=>{vecSyncUI();draw()});return}
+    case 'pencil':{
+      const l=vecTarget(true);if(!l)return;const raw=d.pts.map(q=>{const t=s2l(l,q.x,q.y);return [t[0],t[1]]});
+      if(raw.length<2)return;vecBegin(l);
+      const tol=3/view.z/(l.scale||1);let pts=vsimplify(raw,tol),closed=false;
+      if(pts.length>2&&Math.hypot(pts[0][0]-pts[pts.length-1][0],pts[0][1]-pts[pts.length-1][1])<tol*5){pts.pop();closed=true}
+      const path={id:vpid(),sp:[vsmooth(pts,closed)],...vstyle(!closed)};
+      l.vec.paths.push(path);vs.sel=new Set([path.id]);vs.node=null;vecDirty(l);vecCommit().then(()=>{vecSyncUI();draw()});return}
+  }
+}
+function vsimplify(pts,tol){
+  if(pts.length<3)return pts;const keep=new Uint8Array(pts.length);keep[0]=keep[pts.length-1]=1;const st=[[0,pts.length-1]];
+  while(st.length){const [a,b]=st.pop();let md=0,mi=-1;const A=pts[a],B=pts[b],dx=B[0]-A[0],dy=B[1]-A[1],L2=dx*dx+dy*dy;
+    for(let i=a+1;i<b;i++){const P=pts[i];let d;if(L2<1e-9)d=Math.hypot(P[0]-A[0],P[1]-A[1]);else{const t=Math.max(0,Math.min(1,((P[0]-A[0])*dx+(P[1]-A[1])*dy)/L2));d=Math.hypot(P[0]-A[0]-t*dx,P[1]-A[1]-t*dy)}if(d>md){md=d;mi=i}}
+    if(md>tol&&mi>0){keep[mi]=1;st.push([a,mi],[mi,b])}}
+  return pts.filter((_,i)=>keep[i]);
+}
+function vsmooth(pts,closed){ // points -> curve nodes (catmull-rom)
+  const n=pts.length,out=[];
+  for(let i=0;i<n;i++){
+    const P=pts[i],A=pts[closed?(i+n-1)%n:Math.max(i-1,0)],B=pts[closed?(i+1)%n:Math.min(i+1,n-1)];
+    let tx=(B[0]-A[0])/6,ty=(B[1]-A[1])/6;
+    if(!closed&&i===0){tx=(B[0]-P[0])/3;ty=(B[1]-P[1])/3;out.push([P[0],P[1],0,0,tx,ty]);continue}
+    if(!closed&&i===n-1){tx=(P[0]-A[0])/3;ty=(P[1]-A[1])/3;out.push([P[0],P[1],-tx,-ty,0,0]);continue}
+    out.push([P[0],P[1],-tx,-ty,tx,ty]);
+  }
+  return {n:out,c:closed};
+}
+/* node operations */
+function vecToggleSmooth(L){
+  const r=vnodeRef(L);if(!r)return;const n=r.n,s=r.s.n,N=s.length,c=r.s.c;
+  if(n[2]||n[3]||n[4]||n[5]){n[2]=n[3]=n[4]=n[5]=0}
+  else{
+    const A=(r.i>0||c)?s[(r.i+N-1)%N]:null,B=(r.i<N-1||c)?s[(r.i+1)%N]:null;
+    let dx=0,dy=0;if(A&&B){dx=B[0]-A[0];dy=B[1]-A[1]}else if(B){dx=B[0]-n[0];dy=B[1]-n[1]}else if(A){dx=n[0]-A[0];dy=n[1]-A[1]}
+    const dl=Math.hypot(dx,dy)||1;dx/=dl;dy/=dl;
+    const li=A?Math.hypot(n[0]-A[0],n[1]-A[1])/3:0,lo=B?Math.hypot(B[0]-n[0],B[1]-n[1])/3:0;
+    n[2]=-dx*li;n[3]=-dy*li;n[4]=dx*lo;n[5]=dy*lo;
+  }
+  vecDirty(L);vecCommit().then(()=>{vecSyncUI();draw()});
+}
+function vsplit(s,i,t){
+  const a=s.n[i],b=s.n[(i+1)%s.n.length],k=vseg(a,b),lerp=(p,q)=>[p[0]+(q[0]-p[0])*t,p[1]+(q[1]-p[1])*t];
+  const P0=[k[0],k[1]],P1=[k[2],k[3]],P2=[k[4],k[5]],P3=[k[6],k[7]],A=lerp(P0,P1),B=lerp(P1,P2),C=lerp(P2,P3),D=lerp(A,B),E=lerp(B,C),F=lerp(D,E);
+  const nn=[F[0],F[1],D[0]-F[0],D[1]-F[1],E[0]-F[0],E[1]-F[1]];
+  if(vflat(a,b))nn[2]=nn[3]=nn[4]=nn[5]=0;else{a[4]=A[0]-a[0];a[5]=A[1]-a[1];b[2]=C[0]-b[0];b[3]=C[1]-b[1]}
+  s.n.splice(i+1,0,nn);return i+1;
+}
+function vecAddNodeAt(L,lx,ly){ // double-tap on a selected path's edge
+  let best=null;
+  for(const p of L.vec.paths){if(!vs.sel.has(p.id))continue;
+    p.sp.forEach((s,si)=>{const cnt=s.c?s.n.length:s.n.length-1;
+      for(let i=0;i<cnt;i++){const a=s.n[i],b=s.n[(i+1)%s.n.length],k=vseg(a,b);
+        for(let j=1;j<24;j++){const t=j/24,u=1-t,x=u*u*u*k[0]+3*u*u*t*k[2]+3*u*t*t*k[4]+t*t*t*k[6],y=u*u*u*k[1]+3*u*u*t*k[3]+3*u*t*t*k[5]+t*t*t*k[7],d=Math.hypot(x-lx,y-ly);
+          if(!best||d<best.d)best={d,p,s,si,i,t}}}})}
+  if(!best||best.d*view.z*L.scale>22)return false;
+  vecBegin(L);const ni=vsplit(best.s,best.i,best.t);vs.node={p:best.p.id,si:best.si,i:ni};
+  vecDirty(L);vecCommit().then(()=>{vecSyncUI();draw()});return true;
+}
+function vecAddNodeBtn(){
+  const L=sel();if(!vecLayer(L))return;let r=vnodeRef(L),s,si,i,p;
+  if(r){s=r.s;si=r.si;i=r.i;p=r.p;if(!s.c&&i>=s.n.length-1)i=Math.max(0,i-1)}
+  else{p=L.vec.paths.find(q=>vs.sel.has(q.id));if(!p)return toast('select a shape first','warn');s=p.sp[0];si=0;i=0}
+  if(s.n.length<2)return;vecBegin(L);const ni=vsplit(s,i,.5);vs.node={p:p.id,si,i:ni};vecDirty(L);vecCommit().then(()=>{vecSyncUI();draw()});
+}
+function vecDelNode(L){
+  const r=vnodeRef(L);if(!r)return false;vecBegin(L);r.s.n.splice(r.i,1);
+  if(r.s.n.length<2){r.p.sp.splice(r.si,1);if(!r.p.sp.length){L.vec.paths.splice(L.vec.paths.indexOf(r.p),1);vs.sel.delete(r.p.id)}}
+  vs.node=null;vecDirty(L);vecCommit().then(()=>{vecSyncUI();draw()});return true;
+}
+function vecDelete(){
+  const L=sel();if(!vecLayer(L)||L.lock)return;
+  if(vs.node){vecDelNode(L);return}
+  if(!vs.sel.size)return;vecBegin(L);L.vec.paths=L.vec.paths.filter(p=>!vs.sel.has(p.id));vs.sel=new Set();vs.node=null;vecDirty(L);vecCommit().then(()=>{vecSyncUI();draw()});
+}
+function vecToggleClose(){
+  const L=sel();if(!vecLayer(L))return;let s=null;const r=vnodeRef(L);
+  if(r)s=r.s;else{const p=L.vec.paths.find(q=>vs.sel.has(q.id));if(p)s=p.sp[0]}
+  if(!s||s.n.length<3)return toast('select a path with three or more nodes','warn');
+  vecBegin(L);s.c=!s.c;vecDirty(L);vecCommit().then(()=>{vecSyncUI();draw()});
+}
+function vecNodeType(smooth){ // buttons: make the selected node smooth / sharp
+  const L=sel();if(!vecLayer(L))return;const r=vnodeRef(L);if(!r)return toast('tap a node first','warn');
+  const has=!!(r.n[2]||r.n[3]||r.n[4]||r.n[5]);if(smooth===has)return;vecBegin(L);vecToggleSmooth(L);
+}
+function vecArrange(k){
+  const L=sel();if(!vecLayer(L)||!vs.sel.size)return;vecBegin(L);const ps=L.vec.paths;
+  if(k==='dup'){const add=[];for(const p of ps)if(vs.sel.has(p.id)){const c=JSON.parse(JSON.stringify(p));c.id=vpid();for(const s of c.sp)for(const n of s.n){n[0]+=24;n[1]+=24}add.push(c)}ps.push(...add);vs.sel=new Set(add.map(p=>p.id));vs.node=null}
+  else if(k==='up'){for(let i=ps.length-2;i>=0;i--)if(vs.sel.has(ps[i].id)&&!vs.sel.has(ps[i+1].id))[ps[i],ps[i+1]]=[ps[i+1],ps[i]]}
+  else if(k==='down'){for(let i=1;i<ps.length;i++)if(vs.sel.has(ps[i].id)&&!vs.sel.has(ps[i-1].id))[ps[i],ps[i-1]]=[ps[i-1],ps[i]]}
+  vecDirty(L);vecCommit().then(()=>{vecSyncUI();draw()});
+}
+/* combine shapes (boolean) */
+function vring(pts){const out=[];for(const q of pts){const l=out[out.length-1];if(!l||Math.abs(l[0]-q[0])>1e-6||Math.abs(l[1]-q[1])>1e-6)out.push([q[0],q[1]])}if(out.length>1){const f=out[0],l=out[out.length-1];if(Math.abs(f[0]-l[0])<1e-6&&Math.abs(f[1]-l[1])<1e-6)out.pop()}return out}
+function vinside(pt,ring){let c=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if((a[1]>pt[1])!==(b[1]>pt[1])&&pt[0]<(b[0]-a[0])*(pt[1]-a[1])/(b[1]-a[1])+a[0])c=!c}return c}
+function vgeom(p){ // a closed path -> polygons with holes (nesting decides what is a hole)
+  const rings=[];vpts(p).forEach((r,i)=>{if(p.sp[i].c){const q=vring(r);if(q.length>=3)rings.push(q)}});
+  const depth=rings.map((r,i)=>rings.reduce((d,o,j)=>d+(j!==i&&vinside(r[0],o)?1:0),0)),close=r=>[...r,r[0]],polys=[];
+  rings.forEach((r,i)=>{if(depth[i]%2===0){const holes=rings.filter((o,j)=>depth[j]===depth[i]+1&&vinside(o[0],r));polys.push([close(r),...holes.map(close)])}});
+  return polys;
+}
+function vsimplifyClosed(pts,tol){
+  if(pts.length<4)return pts;let k=0,md=0;for(let i=1;i<pts.length;i++){const d=Math.hypot(pts[i][0]-pts[0][0],pts[i][1]-pts[0][1]);if(d>md){md=d;k=i}}
+  const a=vsimplify(pts.slice(0,k+1),tol),b=vsimplify([...pts.slice(k),pts[0]],tol);return [...a.slice(0,-1),...b.slice(0,-1)];
+}
+/* curve fitting (Schneider): turns the many tiny steps a combine leaves behind back into a few smooth nodes */
+function vgen(P,u,t1,t2){
+  const n=P.length,p0=P[0],p3=P[n-1];let C00=0,C01=0,C11=0,X0=0,X1=0;
+  for(let i=0;i<n;i++){const t=u[i],m=1-t,b0=m*m*m,b1=3*m*m*t,b2=3*m*t*t,b3=t*t*t,a1x=t1[0]*b1,a1y=t1[1]*b1,a2x=t2[0]*b2,a2y=t2[1]*b2;
+    C00+=a1x*a1x+a1y*a1y;C01+=a1x*a2x+a1y*a2y;C11+=a2x*a2x+a2y*a2y;
+    const tx=P[i][0]-(p0[0]*(b0+b1)+p3[0]*(b2+b3)),ty=P[i][1]-(p0[1]*(b0+b1)+p3[1]*(b2+b3));X0+=a1x*tx+a1y*ty;X1+=a2x*tx+a2y*ty}
+  const det=C00*C11-C01*C01,seg=Math.hypot(p3[0]-p0[0],p3[1]-p0[1]);let a=det?(X0*C11-X1*C01)/det:0,b=det?(C00*X1-C01*X0)/det:0;
+  if(a<1e-6*seg||b<1e-6*seg||!isFinite(a)||!isFinite(b))a=b=seg/3;
+  return [p0,[p0[0]+t1[0]*a,p0[1]+t1[1]*a],[p3[0]+t2[0]*b,p3[1]+t2[1]*b],p3];
+}
+function vbz(b,t){const m=1-t,A=m*m*m,B=3*m*m*t,C=3*m*t*t,D=t*t*t;return [A*b[0][0]+B*b[1][0]+C*b[2][0]+D*b[3][0],A*b[0][1]+B*b[1][1]+C*b[2][1]+D*b[3][1]]}
+function vnewton(b,P,t){
+  const m=1-t,q=vbz(b,t),d1=[0,1].map(k=>3*((b[1][k]-b[0][k])*m*m+2*(b[2][k]-b[1][k])*m*t+(b[3][k]-b[2][k])*t*t)),d2=[0,1].map(k=>6*((b[2][k]-2*b[1][k]+b[0][k])*m+(b[3][k]-2*b[2][k]+b[1][k])*t));
+  const num=(q[0]-P[0])*d1[0]+(q[1]-P[1])*d1[1],den=d1[0]*d1[0]+d1[1]*d1[1]+(q[0]-P[0])*d2[0]+(q[1]-P[1])*d2[1];return den?Math.min(1,Math.max(0,t-num/den)):t;
+}
+function vfit(P,t1,t2,err){
+  const n=P.length;
+  if(n===2){const d=Math.hypot(P[1][0]-P[0][0],P[1][1]-P[0][1])/3;return [[P[0],[P[0][0]+t1[0]*d,P[0][1]+t1[1]*d],[P[1][0]+t2[0]*d,P[1][1]+t2[1]*d],P[1]]]}
+  let u=[0];for(let i=1;i<n;i++)u.push(u[i-1]+Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]));const tot=u[n-1]||1;u=u.map(v=>v/tot);
+  let b=vgen(P,u,t1,t2);const worst=bb=>{let me=0,si=Math.floor(n/2);for(let i=1;i<n-1;i++){const q=vbz(bb,u[i]),d=(q[0]-P[i][0])**2+(q[1]-P[i][1])**2;if(d>me){me=d;si=i}}return [me,si]};
+  let [me,si]=worst(b);if(me<err*err)return [b];
+  if(me<err*err*16)for(let k=0;k<5;k++){u=u.map((t,i)=>vnewton(b,P[i],t));b=vgen(P,u,t1,t2);[me,si]=worst(b);if(me<err*err)return [b]}
+  const c=[P[si-1][0]-P[si+1][0],P[si-1][1]-P[si+1][1]],cl=Math.hypot(c[0],c[1])||1,tc=[c[0]/cl,c[1]/cl];
+  return [...vfit(P.slice(0,si+1),t1,tc,err),...vfit(P.slice(si),[-tc[0],-tc[1]],t2,err)];
+}
+function vfitRing(pts){ // a closed ring of points -> nodes (corners stay sharp, curves become a few smooth nodes)
+  pts=vring(pts);const n=pts.length;if(n<3)return null;
+  const nz=v=>{const l=Math.hypot(v[0],v[1])||1;return [v[0]/l,v[1]/l]},brk=[];
+  for(let i=0;i<n;i++){const a=pts[(i+n-1)%n],q=pts[i],b=pts[(i+1)%n],v1=[q[0]-a[0],q[1]-a[1]],v2=[b[0]-q[0],b[1]-q[1]],l1=Math.hypot(v1[0],v1[1]),l2=Math.hypot(v2[0],v2[1]);
+    if((v1[0]*v2[0]+v1[1]*v2[1])/((l1*l2)||1)<.82||l1>12||l2>12)brk.push(i)}
+  const runs=[];
+  if(!brk.length){runs.push({p:[...pts,pts[0]],t1:nz([pts[1][0]-pts[n-1][0],pts[1][1]-pts[n-1][1]])})}
+  else for(let k=0;k<brk.length;k++){const a=brk[k],b=brk[(k+1)%brk.length],r=[];for(let i=a;;i=(i+1)%n){r.push(pts[i]);if(i===b&&r.length>1)break}runs.push({p:r})}
+  const nodes=[[runs[0].p[0][0],runs[0].p[0][1],0,0,0,0]];
+  for(const r of runs){const P=r.p,m=P.length;let segs;
+    if(m===2)segs=[[P[0],P[0],P[1],P[1]]];
+    else{const t1=r.t1||nz([P[1][0]-P[0][0],P[1][1]-P[0][1]]),t2=r.t1?[-t1[0],-t1[1]]:nz([P[m-2][0]-P[m-1][0],P[m-2][1]-P[m-1][1]]);segs=vfit(P,t1,t2,.4)}
+    for(const b of segs){const l=nodes[nodes.length-1];l[4]=b[1][0]-b[0][0];l[5]=b[1][1]-b[0][1];nodes.push([b[3][0],b[3][1],b[2][0]-b[3][0],b[2][1]-b[3][1],0,0])}}
+  const f=nodes[0],l=nodes.pop();f[2]=l[2];f[3]=l[3];
+  for(const q of nodes)for(let k=2;k<6;k++)if(Math.abs(q[k])<1e-6)q[k]=0;
+  return {n:nodes,c:true};
+}
+function vecBool(op){
+  const L=sel();if(!vecLayer(L)||L.lock)return;const ps=L.vec.paths.filter(p=>vs.sel.has(p.id));
+  if(ps.length<2)return toast('pick two or more shapes first (shift-tap to add)','warn');
+  const pc=window.polygonClipping;if(!pc)return toast('the combine tool did not load - refresh the page','err');
+  const geoms=ps.map(vgeom);if(geoms.some(g=>!g.length))return toast('combine needs closed shapes - close open paths first','warn');
+  let res;try{res=op==='union'?pc.union(...geoms):op==='subtract'?pc.difference(...geoms):op==='intersect'?pc.intersection(...geoms):pc.xor(...geoms)}catch(err){console.warn(err);return toast('could not combine these shapes','err')}
+  const sps=[];for(const poly of res)for(const ring of poly){const sp=vfitRing(ring.slice(0,-1));if(sp&&sp.n.length>=2)sps.push(sp)}
+  if(!sps.length)return toast(op==='intersect'?'these shapes do not overlap':'nothing would be left','warn');
+  vecBegin(L);const base=ps[0],np={id:vpid(),sp:sps,f:base.f,g:base.g,s:base.s,w:base.w},at=L.vec.paths.indexOf(base);
+  L.vec.paths=L.vec.paths.filter(p=>!vs.sel.has(p.id));L.vec.paths.splice(Math.min(at,L.vec.paths.length),0,np);
+  vs.sel=new Set([np.id]);vs.node=null;vecDirty(L);vecCommit().then(()=>{vecSyncUI(true);draw()});
+}
+/* svg out */
+const vf=n=>Math.round(n*100)/100;
+function vecSvg(L){
+  const v=L.vec;let defs='',body='';
+  v.paths.forEach((p,pi)=>{
+    let d='';for(const s of p.sp){const n=s.n;if(!n.length)continue;d+='M'+vf(n[0][0])+' '+vf(n[0][1]);
+      const seg=(a,b)=>{if(vflat(a,b))d+='L'+vf(b[0])+' '+vf(b[1]);else{const k=vseg(a,b);d+='C'+vf(k[2])+' '+vf(k[3])+' '+vf(k[4])+' '+vf(k[5])+' '+vf(k[6])+' '+vf(k[7])}};
+      for(let i=1;i<n.length;i++)seg(n[i-1],n[i]);if(s.c){if(n.length>1)seg(n[n.length-1],n[0]);d+='Z'}}
+    let fill='none';
+    if(p.g){const bb=vbbox(p)||[0,0,1,1],a=p.g.ang*D2R,dx=Math.cos(a),dy=Math.sin(a),w=bb[2]-bb[0],h=bb[3]-bb[1],cx=(bb[0]+bb[2])/2,cy=(bb[1]+bb[3])/2,half=(Math.abs(w*dx)+Math.abs(h*dy))/2||1;
+      defs+=`<linearGradient id="g${pi}" gradientUnits="userSpaceOnUse" x1="${vf(cx-dx*half)}" y1="${vf(cy-dy*half)}" x2="${vf(cx+dx*half)}" y2="${vf(cy+dy*half)}"><stop offset="0" stop-color="${p.g.a}"/><stop offset="1" stop-color="${p.g.b}"/></linearGradient>`;fill=`url(#g${pi})`}
+    else if(p.f)fill=p.f;
+    body+=`<path d="${d}" fill="${fill}" fill-rule="evenodd"${p.s&&p.w>0?` stroke="${p.s}" stroke-width="${vf(p.w)}" stroke-linejoin="round" stroke-linecap="round"`:''}/>`;
+  });
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L.w} ${L.h}" width="${L.w}" height="${L.h}">${defs?'<defs>'+defs+'</defs>':''}${body}</svg>\n`;
+}
+function vecExportSvg(){const L=sel();if(!vecLayer(L))return toast('select a vector layer first','warn');dl(new Blob([vecSvg(L)],{type:'image/svg+xml'}),(L.name||'vector').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-')+'.svg');toast('saved the svg','good')}
+/* svg in */
+const vcc=document.createElement('canvas').getContext('2d');
+function vhexOf(v){if(!v||v==='none')return null;v=String(v).trim();if(v==='currentColor')return '#000000';vcc.fillStyle='#000000';vcc.fillStyle=v;const s=vcc.fillStyle;if(s[0]==='#')return s.length===7?s:null;const m=s.match(/[\d.]+/g);return m&&m.length>=3?'#'+[0,1,2].map(i=>('0'+Math.round(+m[i]).toString(16)).slice(-2)).join(''):null}
+const vmul=(m,n)=>[m[0]*n[0]+m[2]*n[1],m[1]*n[0]+m[3]*n[1],m[0]*n[2]+m[2]*n[3],m[1]*n[2]+m[3]*n[3],m[0]*n[4]+m[2]*n[5]+m[4],m[1]*n[4]+m[3]*n[5]+m[5]];
+function vmat(str){
+  let m=[1,0,0,1,0,0];const re=/(\w+)\s*\(([^)]*)\)/g;let t;
+  while((t=re.exec(str||''))){const a=t[2].split(/[\s,]+/).filter(Boolean).map(Number);let n=null;
+    switch(t[1]){case 'translate':n=[1,0,0,1,a[0]||0,a[1]||0];break;case 'scale':n=[a[0],0,0,a[1]==null?a[0]:a[1],0,0];break;
+      case 'rotate':{const r=(a[0]||0)*D2R,c=Math.cos(r),s=Math.sin(r);n=[c,s,-s,c,0,0];if(a.length>2)n=vmul(vmul([1,0,0,1,a[1],a[2]],n),[1,0,0,1,-a[1],-a[2]]);break}
+      case 'matrix':n=a.slice(0,6);break;case 'skewX':n=[1,0,Math.tan((a[0]||0)*D2R),1,0,0];break;case 'skewY':n=[1,Math.tan((a[0]||0)*D2R),0,1,0,0];break}
+    if(n&&n.length===6&&n.every(isFinite))m=vmul(m,n)}
+  return m;
+}
+function varc(x1,y1,rx,ry,phi,fa,fs,x2,y2){
+  if(!rx||!ry)return [[x1,y1,x2,y2,x2,y2]];rx=Math.abs(rx);ry=Math.abs(ry);const p=phi*D2R,cp=Math.cos(p),sp=Math.sin(p);
+  const dx=(x1-x2)/2,dy=(y1-y2)/2,x1p=cp*dx+sp*dy,y1p=-sp*dx+cp*dy,lam=x1p*x1p/(rx*rx)+y1p*y1p/(ry*ry);if(lam>1){const s=Math.sqrt(lam);rx*=s;ry*=s}
+  const sg=fa===fs?-1:1,nu=rx*rx*ry*ry-rx*rx*y1p*y1p-ry*ry*x1p*x1p,de=rx*rx*y1p*y1p+ry*ry*x1p*x1p,co=sg*Math.sqrt(Math.max(0,nu/de)),cxp=co*rx*y1p/ry,cyp=-co*ry*x1p/rx;
+  const cx=cp*cxp-sp*cyp+(x1+x2)/2,cy=sp*cxp+cp*cyp+(y1+y2)/2,ang=(ux,uy,vx,vy)=>Math.atan2(ux*vy-uy*vx,ux*vx+uy*vy);
+  const th1=ang(1,0,(x1p-cxp)/rx,(y1p-cyp)/ry);let dth=ang((x1p-cxp)/rx,(y1p-cyp)/ry,(-x1p-cxp)/rx,(-y1p-cyp)/ry);
+  if(!fs&&dth>0)dth-=2*Math.PI;else if(fs&&dth<0)dth+=2*Math.PI;
+  const n=Math.max(1,Math.ceil(Math.abs(dth)/(Math.PI/2)-1e-9)),d=dth/n,t=4/3*Math.tan(d/4),out=[],E=(ux,uy)=>[cx+cp*rx*ux-sp*ry*uy,cy+sp*rx*ux+cp*ry*uy];
+  for(let k=0;k<n;k++){const a1=th1+k*d,a2=a1+d,c1=Math.cos(a1),s1=Math.sin(a1),c2=Math.cos(a2),s2=Math.sin(a2),A=E(c1-t*s1,s1+t*c1),B=E(c2+t*s2,s2-t*c2),C=E(c2,s2);out.push([A[0],A[1],B[0],B[1],C[0],C[1]])}
+  out[out.length-1][4]=x2;out[out.length-1][5]=y2;return out;
+}
+function vsvgPath(d){
+  const toks=d.match(/[a-zA-Z]|[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?/g)||[];
+  let i=0,cmd='',x=0,y=0,sx=0,sy=0,pcx=0,pcy=0,pc='',cur=null,guard=0;const sps=[],num=()=>parseFloat(toks[i++]);
+  const start=(X,Y)=>{cur={n:[[X,Y,0,0,0,0]],c:false};sps.push(cur)},line=(X,Y)=>cur.n.push([X,Y,0,0,0,0]);
+  const cubic=(x1,y1,x2,y2,X,Y)=>{const a=cur.n[cur.n.length-1];a[4]=x1-a[0];a[5]=y1-a[1];cur.n.push([X,Y,x2-X,y2-Y,0,0])};
+  while(i<toks.length&&guard++<200000){
+    if(/[a-zA-Z]/.test(toks[i]))cmd=toks[i++];else if(!cmd)break;
+    const rel=cmd===cmd.toLowerCase(),C=cmd.toUpperCase();
+    if(C==='Z'){if(cur){const f=cur.n[0],l=cur.n[cur.n.length-1];if(cur.n.length>1&&Math.abs(f[0]-l[0])<1e-6&&Math.abs(f[1]-l[1])<1e-6){f[2]=l[2];f[3]=l[3];cur.n.pop()}cur.c=true}x=sx;y=sy;cur=null;pc='Z';continue}
+    if(C==='M'){let X=num(),Y=num();if(rel){X+=x;Y+=y}x=sx=X;y=sy=Y;start(X,Y);cmd=rel?'l':'L';pc='M';continue}
+    if(!cur)start(x,y);
+    if(C==='L'){let X=num(),Y=num();if(rel){X+=x;Y+=y}line(X,Y);x=X;y=Y}
+    else if(C==='H'){let X=num();if(rel)X+=x;line(X,y);x=X}
+    else if(C==='V'){let Y=num();if(rel)Y+=y;line(x,Y);y=Y}
+    else if(C==='C'){let a=[num(),num(),num(),num(),num(),num()];if(rel)a=a.map((v,k)=>v+(k%2?y:x));cubic(...a);pcx=a[2];pcy=a[3];x=a[4];y=a[5]}
+    else if(C==='S'){let a=[num(),num(),num(),num()];if(rel)a=a.map((v,k)=>v+(k%2?y:x));const x1=pc==='C'||pc==='S'?2*x-pcx:x,y1=pc==='C'||pc==='S'?2*y-pcy:y;cubic(x1,y1,a[0],a[1],a[2],a[3]);pcx=a[0];pcy=a[1];x=a[2];y=a[3]}
+    else if(C==='Q'||C==='T'){let qx,qy,X,Y;if(C==='Q'){let a=[num(),num(),num(),num()];if(rel)a=a.map((v,k)=>v+(k%2?y:x));qx=a[0];qy=a[1];X=a[2];Y=a[3]}else{X=num();Y=num();if(rel){X+=x;Y+=y}qx=pc==='Q'||pc==='T'?2*x-pcx:x;qy=pc==='Q'||pc==='T'?2*y-pcy:y}
+      cubic(x+2/3*(qx-x),y+2/3*(qy-y),X+2/3*(qx-X),Y+2/3*(qy-Y),X,Y);pcx=qx;pcy=qy;x=X;y=Y}
+    else if(C==='A'){const rx=num(),ry=num(),ph=num(),fa=num(),fs=num();let X=num(),Y=num();if(rel){X+=x;Y+=y}for(const k of varc(x,y,rx,ry,ph,fa?1:0,fs?1:0,X,Y))cubic(...k);x=X;y=Y}
+    else break;
+    pc=C;
+  }
+  return sps.filter(s=>s.n.length>1||s.c);
+}
+function vsvgStyle(el,par){
+  const st={...par},decl={};
+  (el.getAttribute('style')||'').split(';').forEach(s=>{const k=s.indexOf(':');if(k>0)decl[s.slice(0,k).trim()]=s.slice(k+1).trim()});
+  for(const k of ['fill','stroke','stroke-width']){const v=decl[k]!=null?decl[k]:el.getAttribute(k);if(v!=null&&v!=='')st[k]=v}
+  return st;
+}
+function vsvgGrad(doc,ref){
+  const m=/url\(\s*['"]?#([^'")\s]+)/.exec(ref||'');if(!m)return null;let g=doc.getElementById(m[1]),guard=0;
+  while(g&&!g.querySelector('stop')&&guard++<5){const h=(g.getAttribute('href')||g.getAttribute('xlink:href')||'').replace('#','');g=h?doc.getElementById(h):null}
+  if(!g)return null;const stops=[...g.querySelectorAll('stop')];if(!stops.length)return null;
+  const col=s=>{const sd=(s.getAttribute('style')||'').match(/stop-color\s*:\s*([^;]+)/);return vhexOf(sd?sd[1]:s.getAttribute('stop-color')||'#000')||'#000000'};
+  const pn=n=>parseFloat(g.getAttribute(n)),x1=pn('x1')||0,y1=pn('y1')||0,x2=g.getAttribute('x2')==null?1:pn('x2'),y2=pn('y2')||0;
+  return {a:col(stops[0]),b:col(stops[stops.length-1]),ang:Math.round(Math.atan2(y2-y1,x2-x1)/D2R)};
+}
+function vsvgWalk(el,M,par,out,doc){
+  const tn=el.localName;
+  if(['defs','clipPath','mask','symbol','style','title','desc','metadata','linearGradient','radialGradient','pattern','filter','marker','script'].includes(tn))return;
+  if(el.getAttribute('display')==='none')return;
+  const m=vmul(M,vmat(el.getAttribute('transform'))),st=vsvgStyle(el,par);
+  if(tn==='g'||tn==='svg'||tn==='a'){for(const c of el.children)vsvgWalk(c,m,st,out,doc);return}
+  const A=n=>parseFloat(el.getAttribute(n))||0;let sps=null;
+  if(tn==='path')sps=vsvgPath(el.getAttribute('d')||'');
+  else if(tn==='rect'){const w=A('width'),h=A('height');if(w>0&&h>0){const rx=Math.min(A('rx')||A('ry'),w/2,h/2);sps=[vrectNodes(A('x'),A('y'),w,h,rx)]}}
+  else if(tn==='circle'){const r=A('r');if(r>0)sps=[vellNodes(A('cx'),A('cy'),r,r)]}
+  else if(tn==='ellipse'){const rx=A('rx'),ry=A('ry');if(rx>0&&ry>0)sps=[vellNodes(A('cx'),A('cy'),rx,ry)]}
+  else if(tn==='line')sps=[{n:[vN(A('x1'),A('y1')),vN(A('x2'),A('y2'))],c:false}];
+  else if(tn==='polyline'||tn==='polygon'){const a=(el.getAttribute('points')||'').match(/[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?/g)||[],n=[];for(let k=0;k+1<a.length;k+=2)n.push(vN(+a[k],+a[k+1]));if(n.length>1)sps=[{n,c:tn==='polygon'}]}
+  if(!sps||!sps.length)return;
+  const det=Math.sqrt(Math.abs(m[0]*m[3]-m[1]*m[2]))||1;
+  for(const s of sps)for(const n of s.n){const x=n[0],y=n[1];n[0]=m[0]*x+m[2]*y+m[4];n[1]=m[1]*x+m[3]*y+m[5];for(const k of [2,4]){const hx=n[k],hy=n[k+1];n[k]=m[0]*hx+m[2]*hy;n[k+1]=m[1]*hx+m[3]*hy}}
+  const fillV=st.fill==null?'#000000':st.fill,strokeV=st.stroke;let f=null,g=null;
+  if(/^url\(/.test(fillV)){g=vsvgGrad(doc,fillV);if(!g)f='#808080'}else f=vhexOf(fillV);
+  const s=/^url\(/.test(strokeV||'')?'#808080':vhexOf(strokeV),w=parseFloat(st['stroke-width']);
+  out.push({id:vpid(),sp:sps,f,g,s,w:s?(isFinite(w)?w:1)*det:0});
+}
+async function vecImportSvg(text,name){
+  let doc;try{doc=new DOMParser().parseFromString(text,'image/svg+xml')}catch(_){}
+  const root=doc&&doc.documentElement;if(!root||root.localName!=='svg'||doc.querySelector('parsererror'))return toast('could not read this svg','err');
+  const paths=[];vsvgWalk(root,[1,0,0,1,0,0],{},paths,doc);
+  if(!paths.length)return toast('no shapes found in this svg (pictures inside an svg are not supported)','warn');
+  let vb=(root.getAttribute('viewBox')||'').split(/[\s,]+/).map(Number);
+  if(vb.length<4||vb.some(v=>!isFinite(v))||vb[2]<=0||vb[3]<=0){const tmp={paths};const b=vecBounds(tmp);vb=[b[0],b[1],b[2]-b[0],b[3]-b[1]]}
+  const big=Math.max(vb[2],vb[3]),f=(big<300||big>3840)?1200/big:1,ox=state.W/2-vb[2]*f/2,oy=state.H/2-vb[3]*f/2;
+  for(const p of paths){p.w*=f;for(const s of p.sp)for(const n of s.n){n[0]=(n[0]-vb[0])*f+ox;n[1]=(n[1]-vb[1])*f+oy;for(const k of [2,3,4,5])n[k]*=f}}
+  const L=vecNewLayer((name||'svg').replace(/\.svg$/i,'').slice(0,40),vecClean({paths},0).paths);
+  vecBegin(L);vs.dirty=L.id;vecFlush();await vecCommit();vs.sel=new Set();vs.node=null;vecSyncUI();draw();
+  toast(`imported ${paths.length} shape${paths.length===1?'':'s'} - tap one with the vector tool to edit`,'good');
+}
+/* drawing the editing overlay on the canvas */
+function vecOverlay(){
+  const L=sel();
+  if(L&&vecLayer(L)){
+    const m=(x,y)=>{const q=toScreen(l2s(L,x,y));return [q.x,q.y]},rn=vnodeRef(L);
+    ctx.save();ctx.lineWidth=1.5;ctx.lineJoin='round';
+    for(const p of L.vec.paths){if(!vs.sel.has(p.id))continue;
+      vtrace(ctx,p,m);ctx.strokeStyle='#D97757';ctx.stroke();
+      for(const s of p.sp)for(let i=0;i<s.n.length;i++){const n=s.n[i],q=m(n[0],n[1]),on=rn&&rn.n===n;
+        if(on){ctx.strokeStyle='#F0B49A';ctx.lineWidth=1;for(const k of [2,4])if(n[k]||n[k+1]){const h=m(n[0]+n[k],n[1]+n[k+1]);ctx.beginPath();ctx.moveTo(q[0],q[1]);ctx.lineTo(h[0],h[1]);ctx.stroke();ctx.fillStyle='#141413';ctx.beginPath();ctx.arc(h[0],h[1],5,0,7);ctx.fill();ctx.stroke()}ctx.lineWidth=1.5}
+        ctx.fillStyle=on?'#D97757':'#141413';ctx.strokeStyle='#D97757';ctx.beginPath();ctx.rect(q[0]-5,q[1]-5,10,10);ctx.fill();ctx.stroke()}}
+    if(vs.pen&&vs.hover){const p=L.vec.paths.find(q=>q.id===vs.pen.p);if(p){const s=p.sp[0],l=s.n[s.n.length-1];if(l){const a=m(l[0],l[1]),c1=m(l[0]+l[4],l[1]+l[5]),b=vts(vs.hover);ctx.setLineDash([6,5]);ctx.strokeStyle='#F0B49A';ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.bezierCurveTo(c1[0],c1[1],b.x,b.y,b.x,b.y);ctx.stroke();ctx.setLineDash([])}}}
+    ctx.restore();
+  }
+  if(vd){
+    ctx.save();ctx.lineWidth=1.5;ctx.strokeStyle='#D97757';ctx.setLineDash([7,5]);
+    if(vd.kind==='shape'){let a=vts(vd.a),b=vts(vd.b);if(vd.shift&&vs.mode!=='line'){const mm=Math.max(Math.abs(b.x-a.x),Math.abs(b.y-a.y));b={x:a.x+Math.sign(b.x-a.x||1)*mm,y:a.y+Math.sign(b.y-a.y||1)*mm}}
+      const s=vshape(vs.mode,a.x,a.y,b.x,b.y);ctx.fillStyle=vs.fill+'55';vtrace(ctx,{sp:[s]});if(vs.mode!=='line'&&vs.fillOn)ctx.fill('evenodd');ctx.stroke()}
+    else if(vd.kind==='pencil'){ctx.setLineDash([]);ctx.beginPath();vd.pts.forEach((q,i)=>{const s=vts(q);i?ctx.lineTo(s.x,s.y):ctx.moveTo(s.x,s.y)});ctx.stroke()}
+    else if(vd.kind==='marq'){const a=vts(vd.a),b=vts(vd.b);ctx.fillStyle='rgba(217,119,87,.12)';ctx.fillRect(Math.min(a.x,b.x),Math.min(a.y,b.y),Math.abs(b.x-a.x),Math.abs(b.y-a.y));ctx.strokeRect(Math.min(a.x,b.x),Math.min(a.y,b.y),Math.abs(b.x-a.x),Math.abs(b.y-a.y))}
+    ctx.restore();
+  }
+}
+function vecKey(e){
+  if(e.key==='Enter'&&vs.pen){vecPenEnd();return true}
+  if(e.key==='Escape'){if(vs.pen){vecPenEnd();return true}if(vs.sel.size||vs.node){vs.sel=new Set();vs.node=null;vecSyncUI();draw();return true}setTool('move');return true}
+  if(e.key==='Backspace'&&vs.pen){const L=sel(),p=L&&L.vec&&L.vec.paths.find(q=>q.id===vs.pen.p);if(p){p.sp[0].n.pop();vs.node=null;if(!p.sp[0].n.length){vecPenEnd()}else vecDirty(L);draw()}return true}
+  if(e.key==='Delete'||e.key==='Backspace'){const L=sel();if(vecLayer(L)&&(vs.sel.size||vs.node)){vecDelete();return true}return false}
+  const k=e.key.toLowerCase(),map={a:'select',p:'pen',n:'pencil',l:'line',m:'rect',o:'ellipse'};
+  if(map[k]&&!e.ctrlKey&&!e.metaKey){vecSetMode(map[k]);return true}
+  return false;
+}
+function vecSetMode(m){if(vs.pen)vecPenEnd();vs.mode=m;vd=null;vecSyncUI();setCursor();draw()}
+function vecLeave(){if(vs.pen)vecPenEnd();vd=null;if(vs.sess)vecCommit();vs.hover=null}
+/* the bar */
+{
+  const on=(id,ev,fn)=>$('#'+id).addEventListener(ev,fn),upd=()=>{vecStyleApply();vecSyncUI0()};
+  const vecSyncUI0=()=>{};
+  $('#vmodes').addEventListener('click',e=>{const b=e.target.closest('[data-vm]');if(b)vecSetMode(b.dataset.vm)});
+  on('vfill','input',e=>{vs.fill=e.target.value;vecStyleApply()});on('vfill','change',()=>vecCommit());
+  on('vfill2','input',e=>{vs.fill2=e.target.value;vecStyleApply()});on('vfill2','change',()=>vecCommit());
+  on('vstroke','input',e=>{vs.stroke=e.target.value;if(!vs.strokeOn&&!vs.sel.size){}else{vs.strokeOn=true;$('#vstrokeon').checked=true}vecStyleApply()});on('vstroke','change',()=>vecCommit());
+  on('vfillon','change',e=>{vs.fillOn=e.target.checked;vecStyleApply();vecCommit();vecSyncUI()});
+  on('vgrad','change',e=>{vs.grad=e.target.checked;if(vs.grad){vs.fillOn=true}vecStyleApply();vecCommit();vecSyncUI()});
+  on('vgang','input',e=>{vs.gang=vnum(e.target.value,90,-360,360);vecStyleApply()});on('vgang','change',()=>vecCommit());
+  on('vstrokeon','change',e=>{vs.strokeOn=e.target.checked;vecStyleApply();vecCommit();vecSyncUI()});
+  on('vsw','input',e=>{const v=vnum(e.target.value,NaN,0,500);if(!isFinite(v))return;vs.sw=v;if(vs.strokeOn)vecStyleApply()});on('vsw','change',()=>vecCommit());
+  on('vn','input',e=>{vs.sides=Math.round(vnum(e.target.value,6,3,24))});on('vp','input',e=>{vs.pts=Math.round(vnum(e.target.value,5,3,24))});
+  on('vi','input',e=>{vs.inner=vnum(e.target.value,50,5,95)/100});on('vr','input',e=>{vs.round=vnum(e.target.value,0,0,100)});
+  $('#vbar').addEventListener('click',e=>{const b=e.target.closest('[data-vb]');if(!b||b.disabled)return;const k=b.dataset.vb;
+    if(['union','subtract','intersect','exclude'].includes(k))vecBool(k);
+    else if(k==='addnode')vecAddNodeBtn();else if(k==='delnode'||k==='del')vecDelete();
+    else if(k==='smooth')vecNodeType(true);else if(k==='sharp')vecNodeType(false);else if(k==='close')vecToggleClose();
+    else if(k==='dup'||k==='up'||k==='down')vecArrange(k);
+    else if(k==='svgout')vecExportSvg();else if(k==='svgin')$('#svgfile').click()});
+  $('#svgfile').addEventListener('change',async e=>{for(const f of e.target.files)vecImportSvg(await f.text(),f.name);e.target.value=''});
+}
 
 /* ---------- fx: particle generator (roll, lock, mutate), effect layers with a play button, export for the game ---------- */
 // The engine is ONE function: it runs the preview here and its source is exported as particles.js, so the game plays exactly what you saw.
@@ -3536,7 +4174,7 @@ function animExportEntries(list){
   if(!list.some(l=>l.anim))return[];const enc=new TextEncoder();
   return[{name:'anim.js',data:enc.encode(ANIM_RUNTIME())},{name:'ANIM-README.md',data:enc.encode(ANIM_README)}];
 }
-window.__lf={anCopyClip,ans,ENGA,animOpen,animClose,rigMotions,rigApply,rigRoll,anGuess,anPivots,animCleanAll,anRefresh,animFrameNow,sfxRoll,sfxMutate,sfxClean,fxAudio,fxs,fxRoll,fxMutate,fxOpen,fxClose,fxAddLayer,fxUpdateLayer,fxPlay,fxPlaying,fxOk,fxPoster,FXE,FXR,fxClean,fxExportEntries,fxLoad,shapeCreate,shapeLive,shapeCommit,shapeOk,renderShape,get sdrag(){return sdrag},cornersFlat,autoWandLayer,autoBgSel,planParse,openPlan,finishPlans,cropRef,syncChildren,tcache,finishPick,startPick,detachLayer,get pickPar(){return pickPar},dupLayer,makeVariants,feelPreview,feelApply,feelCancel,get fs(){return fs},get gb(){return gb},set gb(v){gb=v;gbBtn();draw()},gbToggle,gbHit,gbPts,enqueueUpscale,flattenScene,mergeLayers,selIds,msel,rdCut,get rd(){return rd},rdPaint,enqueueRedraw,getRefs,composePrompt,setRef,getRefs,cutRegion,get cs(){return cs},applyCut,state,store,view,brush,applyWand,cfg,jobs,enqueue,setTool,addBlank,importFiles,saveZip,zipBuild,zipRead,edit,undo,redo,fit}; // handy for debugging
+window.__lf={vs,vecOk,vecBool,vecSvg,vecImportSvg,vsvgPath,vecClean,vecNewLayer,vecBegin,vecCommit,vecDirty,vecFlush,vecSetMode,vecDown,vecMove,vecUp,vecDelete,vecToggleSmooth,vecAddNodeBtn,vgeom,get vd(){return vd},anCopyClip,ans,ENGA,animOpen,animClose,rigMotions,rigApply,rigRoll,anGuess,anPivots,animCleanAll,anRefresh,animFrameNow,sfxRoll,sfxMutate,sfxClean,fxAudio,fxs,fxRoll,fxMutate,fxOpen,fxClose,fxAddLayer,fxUpdateLayer,fxPlay,fxPlaying,fxOk,fxPoster,FXE,FXR,fxClean,fxExportEntries,fxLoad,shapeCreate,shapeLive,shapeCommit,shapeOk,renderShape,get sdrag(){return sdrag},cornersFlat,autoWandLayer,autoBgSel,planParse,openPlan,finishPlans,cropRef,syncChildren,tcache,finishPick,startPick,detachLayer,get pickPar(){return pickPar},dupLayer,makeVariants,feelPreview,feelApply,feelCancel,get fs(){return fs},get gb(){return gb},set gb(v){gb=v;gbBtn();draw()},gbToggle,gbHit,gbPts,enqueueUpscale,flattenScene,mergeLayers,selIds,msel,rdCut,get rd(){return rd},rdPaint,enqueueRedraw,getRefs,composePrompt,setRef,getRefs,cutRegion,get cs(){return cs},applyCut,state,store,view,brush,applyWand,cfg,jobs,enqueue,setTool,addBlank,importFiles,saveZip,zipBuild,zipRead,edit,undo,redo,fit}; // handy for debugging
 (async()=>{
   $('#sname').value=state.name;$('#sname').style.width='10ch';
   if(innerWidth<1000)document.body.classList.add('noside');
