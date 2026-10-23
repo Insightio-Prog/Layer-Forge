@@ -1305,7 +1305,7 @@ function gbPaint(){
   ctx.restore();
 }
 /* ---------- ai image generation (keys stay in this browser) ---------- */
-const DEF={provider:'openai',openaiKey:'',geminiKey:'',openaiModel:'gpt-image-2',geminiModel:'gemini-nano-banana-2.1',size:'medium',quality:'medium',openaiBase:'https://api.openai.com',geminiBase:'https://generativelanguage.googleapis.com'};
+const DEF={provider:'openai',openaiKey:'',geminiKey:'',openaiModel:'gpt-image-2.5-sunburst',geminiModel:'gemini-nano-banana-2.1',size:'medium',quality:'medium',openaiBase:'https://api.openai.com',geminiBase:'https://generativelanguage.googleapis.com'};
 const cfg={...DEF};
 try{Object.assign(cfg,JSON.parse(localStorage.getItem('lf-settings')||'{}'))}catch(_){}
 const saveCfg=()=>{try{localStorage.setItem('lf-settings',JSON.stringify(cfg))}catch(_){toast('could not store settings in this browser','warn')}};
@@ -1530,7 +1530,7 @@ async function runJob(j){
   }
 }
 function openSettings(){
-  const om=['gpt-image-2','gpt-image-1.5','gpt-image-1','gpt-image-1-mini'],gm=['gemini-nano-banana-2.1','gemini-3.1-flash-image','gemini-3-pro-image','gemini-2.5-flash-image'];
+  const om=['gpt-image-2.5-sunburst','gpt-image-2.5-flare','gpt-image-2','gpt-image-1.5','gpt-image-1','gpt-image-1-mini'],gm=['gemini-nano-banana-2.1','gemini-3.1-flash-image','gemini-3-pro-image','gemini-2.5-flash-image'];
   const opt=(a,v)=>a.map(x=>`<option value="${x}" ${x===v?'selected':''}>${x}</option>`).join('');
   openModal(`<h2><span class="d">$</span> settings · ai</h2>
     <div class="dim">api keys are stored in this browser only. they are sent only to the provider you pick, and never go into a scene zip.</div>
