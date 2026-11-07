@@ -2743,7 +2743,8 @@ let zipNm='';try{zipNm=localStorage.getItem('lf-zipnm')||''}catch(_){}
 function setZipNm(n){zipNm=n||'';try{zipNm?localStorage.setItem('lf-zipnm',zipNm):localStorage.removeItem('lf-zipnm')}catch(_){}}
 function dl(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},5000)}
 const isEmptyLayer=l=>{const r=store.get(l.id);return !r||!r.mask||!r.mask.some(v=>v>0)};
-async function saveZip(game){
+const cleanName=(v,ext)=>(v||'').replace(/\.(zip|png)$/i,'').replace(/[\\/:*?"<>|]+/g,'-').trim().slice(0,60);
+async function saveZip(game,nm){
   if(!state.layers.length)return toast('nothing to save yet','warn');
   await flushPending();setBusy(1);
   try{
@@ -2757,7 +2758,7 @@ async function saveZip(game){
     for(let i=0;i<list.length;i++){const l=list[i];entries.push({name:fileFor(l,i),data:new Uint8Array(await store.get(l.id).blob.arrayBuffer())})}
     for(const e of await fxExportEntries(list))entries.push(e);
     for(const e of animExportEntries(list))entries.push(e);
-    const fname=(!game&&zipNm)||slug(state.name)+(game?'-game':'')+'.zip',z=zipBuild(entries);
+    const fname=(nm?nm+'.zip':null)||(!game&&zipNm)||slug(state.name)+(game?'-game':'')+'.zip',z=zipBuild(entries);
     let how='saved';
     if(!game&&TOUCH&&navigator.canShare&&navigator.share){
       /* iPad: the share sheet lets you "Save to Files" and replace the zip you imported */
@@ -2821,31 +2822,33 @@ function exportModal(){
       <div style="margin:6px 0 4px;display:flex;gap:8px"><button class="sm" id="ex-all">all</button><button class="sm" id="ex-none">none</button><span class="dim" id="ex-pn"></span></div>
       <div id="ex-pick" style="max-height:170px;overflow:auto;display:flex;flex-direction:column;gap:2px">${[...state.layers].reverse().map(l=>`<label class="tb-l ck" style="min-height:30px"><input type="checkbox" data-pk="${l.id}" ${selIds().includes(l.id)&&selIds().length>1?'checked':''}> ${esc(l.name)}</label>`).join('')}</div></div></div>
     <div class="opt" data-m="one"><span class="rd"></span><div style="flex:1">single layer<small>one transparent png, trimmed to its content</small><select id="ex-layer" aria-label="layer to export">${[...state.layers].reverse().map(l=>`<option value="${l.id}" ${l.id===L0.id?'selected':''}>${esc(l.name)} · ${l.w}×${l.h}</option>`).join('')}</select></div><span class="sz" id="ex-one">${fmtSize(store.get(L0.id).blob.size)}</span></div>
+    <label class="tb-l" style="margin:10px 0 0">file name<input id="ex-name" placeholder="leave blank for the automatic name" autocomplete="off" spellcheck="false" maxlength="60" aria-label="file name" style="flex:1;min-width:0"><span class="dim" id="ex-ext">.zip</span></label>
     <div class="foot"><button class="cancel" id="ex-x">cancel</button><button class="btn-clay" id="ex-go">${ic('download')} export</button></div>`,m=>{
     $$('.opt',m).forEach(o=>o.addEventListener('click',e=>{if(e.target.closest('select'))return;mode=o.dataset.m;$$('.opt',m).forEach(x=>x.classList.toggle('on',x===o))}));
     $('#ex-layer',m).addEventListener('change',e=>{$('#ex-one',m).textContent=fmtSize(store.get(e.target.value).blob.size);mode='one';$$('.opt',m).forEach(x=>x.classList.toggle('on',x.dataset.m==='one'))});
     const pkc=()=>$$('#ex-pick input',m),pkn=()=>{$('#ex-pn',m).textContent=pkc().filter(c=>c.checked).length+' ticked'};pkn();
     $('#ex-pick',m).addEventListener('change',pkn);
     $('#ex-all',m).onclick=()=>{pkc().forEach(c=>c.checked=true);pkn()};$('#ex-none',m).onclick=()=>{pkc().forEach(c=>c.checked=false);pkn()};
+    const ext=()=>{$('#ex-ext',m).textContent=mode==='flat'||mode==='one'?'.png':'.zip'};$$('.opt',m).forEach(o=>o.addEventListener('click',ext));$('#ex-layer',m).addEventListener('change',ext);
     $('#ex-x',m).onclick=closeModal;
     $('#ex-go',m).onclick=async()=>{
-      const id=$('#ex-layer',m).value,picks=pkc().filter(c=>c.checked).map(c=>c.dataset.pk);
+      const nm=cleanName($('#ex-name',m).value),id=$('#ex-layer',m).value,picks=pkc().filter(c=>c.checked).map(c=>c.dataset.pk);
       if(mode==='pick'&&!picks.length)return toast('tick at least one layer','warn');
       closeModal();await flushPending();
-      if(mode==='pick')return exportPick(picks);
-      if(mode==='zip')await saveZip();
-      else if(mode==='game')await saveZip(true);
-      else if(mode==='flat')await exportFlat();
-      else{const i=state.layers.findIndex(l=>l.id===id);dl(store.get(id).blob,fileFor(state.layers[i],i));toast('exported '+state.layers[i].name,'good')}
+      if(mode==='pick')return exportPick(picks,nm);
+      if(mode==='zip')await saveZip(false,nm);
+      else if(mode==='game')await saveZip(true,nm);
+      else if(mode==='flat')await exportFlat(nm);
+      else{const i=state.layers.findIndex(l=>l.id===id);dl(store.get(id).blob,nm?nm+'.png':fileFor(state.layers[i],i));toast('exported '+state.layers[i].name,'good')}
     };
   });
 }
-async function exportPick(ids){
+async function exportPick(ids,nm){
   setBusy(1);
   try{
     const list=[...state.layers].filter(l=>ids.includes(l.id)),used=new Set(),entries=[];
     for(const l of list){let n=slug(l.name),k=n,i=2;while(used.has(k))k=n+'-'+i++;used.add(k);entries.push({name:k+'.png',data:new Uint8Array(await store.get(l.id).blob.arrayBuffer())})}
-    const fname=slug(state.name)+'-pngs.zip',z=zipBuild(entries);
+    const fname=(nm||slug(state.name)+'-pngs')+'.zip',z=zipBuild(entries);
     if(TOUCH&&navigator.canShare&&navigator.share){
       try{const f=new File([z],fname,{type:'application/zip'});if(navigator.canShare({files:[f]}))await navigator.share({files:[f]});else dl(z,fname)}
       catch(e){if(e&&e.name==='AbortError'){toast('export cancelled','warn');return}dl(z,fname)}
@@ -2853,7 +2856,7 @@ async function exportPick(ids){
     toast('exported '+fname+' · '+list.length+' png'+(list.length===1?'':'s')+' · '+fmtSize(z.size),'good');
   }catch(err){console.error(err);toast('export failed: '+err.message,'err')}finally{setBusy(-1)}
 }
-async function exportFlat(){
+async function exportFlat(nm){
   await flushPending();setBusy(1);
   try{
     const c=document.createElement('canvas');c.width=state.W;c.height=state.H;const x=c.getContext('2d');x.imageSmoothingQuality='high';
@@ -2861,7 +2864,7 @@ async function exportFlat(){
       if(!L.vis)continue;const bm=await createImageBitmap(store.get(L.id).blob);
       x.save();x.globalAlpha=L.op;applyM(x,L);x.drawImage(L.tint?tintedSurface(L,null,bm):bm,0,0,L.w,L.h);x.restore();bm.close&&bm.close();
     }
-    const b=await new Promise(r=>c.toBlob(r,'image/png'));c.width=c.height=0;dl(b,slug(state.name)+'-flat.png');toast('exported flattened image · '+fmtSize(b.size),'good');
+    const b=await new Promise(r=>c.toBlob(r,'image/png'));c.width=c.height=0;dl(b,(nm||slug(state.name)+'-flat')+'.png');toast('exported flattened image · '+fmtSize(b.size),'good');
   }catch(err){console.error(err);toast('export failed: '+err.message,'err')}finally{setBusy(-1)}
 }
 $('#tab-export').onclick=exportModal;
