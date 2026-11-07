@@ -717,6 +717,7 @@ function renderLayers(){
         <button data-act="pivot" title="reset pivot to centre" aria-label="reset pivot">${ic('pivot')}</button>
         <button data-act="wand" title="remove background (w)" aria-label="remove background">${ic('wand')}</button>
         <button data-act="autobg" title="remove the flat background from this layer, or from every selected layer, in one go (no preview)" aria-label="auto remove background">▨ auto bg</button>
+        <button data-act="ren" title="rename layer (or double-click its name)" aria-label="rename layer">✎ name</button>
         <button data-act="dup" title="duplicate" aria-label="duplicate">${ic('copy')}</button>
         <button data-act="attach" title="${L.par?'detach this layer from its parent':'attach to a parent layer (select several to attach them all): the parent drags, scales and turns them along'}" aria-label="attach to parent">${L.par?'⛓ detach':'⛓ attach'}</button>
         <button data-act="mergedown" title="merge with the layer below (ctrl+e)" aria-label="merge down">↧ merge</button>
@@ -770,6 +771,7 @@ LP.addEventListener('click',e=>{
   else if(act==='ai')edit(()=>{L.ai=!L.ai});
   else if(act==='pivot')edit(()=>setPivot(L,.5,.5));
   else if(act==='dup')dupLayer(id);
+  else if(act==='ren')setTimeout(()=>renameLayer(id),30);
   else if(act==='attach')L.par?detachLayer(id):startPick();
   else if(act==='mergedown')mergeDown(id);
   else if(act==='sharper')enqueueUpscale(id);
@@ -777,13 +779,14 @@ LP.addEventListener('click',e=>{
   else if(act==='autobg')autoBgSel();
   else if(act==='del')removeLayer(id);
 });
-LP.addEventListener('dblclick',e=>{
-  const nm=e.target.closest('.nm');if(!nm)return;const row=nm.closest('.row'),L=state.layers.find(l=>l.id===row.dataset.id);if(!L)return;
+function renameLayer(id){
+  const nm=LP.querySelector('.row[data-id="'+id+'"] .nm'),L=state.layers.find(l=>l.id===id);if(!nm||!L)return;
   const inp=document.createElement('input');inp.className='nm-in';inp.value=L.name;inp.maxLength=40;nm.replaceWith(inp);inp.focus();inp.select();
   const done=ok=>{if(!inp.isConnected)return;const v=inp.value.trim();if(ok&&v&&v!==L.name)edit(()=>{L.name=v});else{lastStruct='';renderLayers()}};
   inp.addEventListener('keydown',ev=>{ev.stopPropagation();if(ev.key==='Enter')done(true);if(ev.key==='Escape')done(false)});
   inp.addEventListener('blur',()=>done(true));
-});
+}
+LP.addEventListener('dblclick',e=>{const row=e.target.closest('.nm')&&e.target.closest('.row');if(row)renameLayer(row.dataset.id)});
 LP.addEventListener('input',e=>{
   const f=e.target.dataset.f;if(!f)return;const L=sel();if(!L)return;const v=parseFloat(e.target.value);
   if(f==='op'){edit(()=>{L.op=clamp(v/100,0,1)},'op'+L.id);return}
