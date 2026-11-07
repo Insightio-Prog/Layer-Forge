@@ -2814,19 +2814,41 @@ function exportModal(){
     <div class="opt on" data-m="zip"><span class="rd"></span><div>all layers + scene.json<small>${state.layers.length} transparent pngs named by order, plus positions, as one .zip</small></div><span class="sz">~${fmtSize(total)}</span></div>
     <div class="opt" data-m="game"><span class="rd"></span><div>game-ready zip<small>same as above but leaves out hidden and empty layers, so only what the game needs</small></div><span class="sz">~${fmtSize(state.layers.filter(l=>l.vis&&!isEmptyLayer(l)).reduce((s,l)=>s+store.get(l.id).blob.size,0))}</span></div>
     <div class="opt" data-m="flat"><span class="rd"></span><div>flattened image<small>one ${state.W}×${state.H} png, visible layers only</small></div><span class="sz">png</span></div>
+    <div class="opt" data-m="pick"><span class="rd"></span><div style="flex:1">pick layers → zip of pngs<small>just the layers you tick, one png each (named after the layer), no scene file</small>
+      <div style="margin:6px 0 4px;display:flex;gap:8px"><button class="sm" id="ex-all">all</button><button class="sm" id="ex-none">none</button><span class="dim" id="ex-pn"></span></div>
+      <div id="ex-pick" style="max-height:170px;overflow:auto;display:flex;flex-direction:column;gap:2px">${[...state.layers].reverse().map(l=>`<label class="tb-l ck" style="min-height:30px"><input type="checkbox" data-pk="${l.id}" ${selIds().includes(l.id)&&selIds().length>1?'checked':''}> ${esc(l.name)}</label>`).join('')}</div></div></div>
     <div class="opt" data-m="one"><span class="rd"></span><div style="flex:1">single layer<small>one transparent png, trimmed to its content</small><select id="ex-layer" aria-label="layer to export">${[...state.layers].reverse().map(l=>`<option value="${l.id}" ${l.id===L0.id?'selected':''}>${esc(l.name)} · ${l.w}×${l.h}</option>`).join('')}</select></div><span class="sz" id="ex-one">${fmtSize(store.get(L0.id).blob.size)}</span></div>
     <div class="foot"><button class="cancel" id="ex-x">cancel</button><button class="btn-clay" id="ex-go">${ic('download')} export</button></div>`,m=>{
     $$('.opt',m).forEach(o=>o.addEventListener('click',e=>{if(e.target.closest('select'))return;mode=o.dataset.m;$$('.opt',m).forEach(x=>x.classList.toggle('on',x===o))}));
     $('#ex-layer',m).addEventListener('change',e=>{$('#ex-one',m).textContent=fmtSize(store.get(e.target.value).blob.size);mode='one';$$('.opt',m).forEach(x=>x.classList.toggle('on',x.dataset.m==='one'))});
+    const pkc=()=>$$('#ex-pick input',m),pkn=()=>{$('#ex-pn',m).textContent=pkc().filter(c=>c.checked).length+' ticked'};pkn();
+    $('#ex-pick',m).addEventListener('change',pkn);
+    $('#ex-all',m).onclick=()=>{pkc().forEach(c=>c.checked=true);pkn()};$('#ex-none',m).onclick=()=>{pkc().forEach(c=>c.checked=false);pkn()};
     $('#ex-x',m).onclick=closeModal;
     $('#ex-go',m).onclick=async()=>{
-      const id=$('#ex-layer',m).value;closeModal();await flushPending();
+      const id=$('#ex-layer',m).value,picks=pkc().filter(c=>c.checked).map(c=>c.dataset.pk);
+      if(mode==='pick'&&!picks.length)return toast('tick at least one layer','warn');
+      closeModal();await flushPending();
+      if(mode==='pick')return exportPick(picks);
       if(mode==='zip')await saveZip();
       else if(mode==='game')await saveZip(true);
       else if(mode==='flat')await exportFlat();
       else{const i=state.layers.findIndex(l=>l.id===id);dl(store.get(id).blob,fileFor(state.layers[i],i));toast('exported '+state.layers[i].name,'good')}
     };
   });
+}
+async function exportPick(ids){
+  setBusy(1);
+  try{
+    const list=[...state.layers].filter(l=>ids.includes(l.id)),used=new Set(),entries=[];
+    for(const l of list){let n=slug(l.name),k=n,i=2;while(used.has(k))k=n+'-'+i++;used.add(k);entries.push({name:k+'.png',data:new Uint8Array(await store.get(l.id).blob.arrayBuffer())})}
+    const fname=slug(state.name)+'-pngs.zip',z=zipBuild(entries);
+    if(TOUCH&&navigator.canShare&&navigator.share){
+      try{const f=new File([z],fname,{type:'application/zip'});if(navigator.canShare({files:[f]}))await navigator.share({files:[f]});else dl(z,fname)}
+      catch(e){if(e&&e.name==='AbortError'){toast('export cancelled','warn');return}dl(z,fname)}
+    }else dl(z,fname);
+    toast('exported '+fname+' · '+list.length+' png'+(list.length===1?'':'s')+' · '+fmtSize(z.size),'good');
+  }catch(err){console.error(err);toast('export failed: '+err.message,'err')}finally{setBusy(-1)}
 }
 async function exportFlat(){
   await flushPending();setBusy(1);
